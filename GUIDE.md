@@ -1,4 +1,4 @@
-# Proj1 — The Complete Guide
+# server-express — The Complete Guide
 
 This guide explains every part of this project from the ground up. No prior experience with these tools is assumed — just basic familiarity with JavaScript and the command line.
 
@@ -13,39 +13,37 @@ This guide explains every part of this project from the ground up. No prior expe
 5. [How the Server Works](#how-the-server-works)
 6. [The Database](#the-database)
 7. [Authentication & Security](#authentication--security)
-8. [The Control Panel (GUI)](#the-control-panel-gui)
-9. [The API](#the-api)
-10. [Deploying to the Internet](#deploying-to-the-internet)
-11. [Common Tasks](#common-tasks)
-12. [Troubleshooting](#troubleshooting)
+8. [Dead Drop — Zero-Knowledge Paste Bin](#dead-drop--zero-knowledge-paste-bin)
+9. [The Admin Panel](#the-admin-panel)
+10. [The API](#the-api)
+11. [Deploying to the Internet](#deploying-to-the-internet)
+12. [Common Tasks](#common-tasks)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## What Is This Project?
 
-Proj1 is a **web server** — a program that runs on a computer and responds to requests from web browsers and other programs. It provides:
+This is a **self-hosted tools platform** — a web server that hosts privacy-focused utilities and provides an admin panel to manage everything. Currently it includes:
 
-- A **control panel** you open in your browser to manage data
-- A **REST API** (a set of URLs) that programs can call to read and write data
-- A **PostgreSQL database** to store data permanently
-- **Login protection** so only you can access it
+- **Dead Drop** — an anonymous, zero-knowledge encrypted paste bin
+- **Admin Panel** — a browser-based control panel for managing drops, users, database, and settings
 
-Think of it like a simple version of an admin dashboard you'd find behind a website.
+Think of it as a private toolbox running on the internet. The tools are public (anyone with the link can use Dead Drop), but the admin panel is locked behind authentication.
 
 ---
 
 ## The Technology Stack
 
-Here's every technology used and what role it plays:
-
 | Technology | What It Is | What It Does Here |
 |---|---|---|
 | **Node.js** | A JavaScript runtime | Runs the server code (JavaScript outside a browser) |
 | **Express** | A web framework for Node.js | Handles HTTP requests, routing, and middleware |
-| **PostgreSQL** | A relational database | Stores users, settings, and any future data permanently |
+| **PostgreSQL** | A relational database | Stores users, settings, and encrypted paste data permanently |
 | **Prisma** | An ORM (Object-Relational Mapper) | Lets you work with the database using JavaScript instead of writing raw SQL |
+| **Web Crypto API** | Browser-native cryptography | Encrypts/decrypts paste content entirely in the user's browser |
 | **dotenv** | An env var loader | Reads the `.env` file so you can configure the app without changing code |
-| **express-session** | Session middleware | Keeps you logged in between page loads using browser cookies |
+| **express-session** | Session middleware | Keeps the admin logged in between page loads using browser cookies |
 | **nodemon** | A development tool | Auto-restarts the server when you save a file (dev only) |
 
 ### What Is an ORM?
@@ -88,49 +86,41 @@ Proj1/
 │   ├── schema.prisma       # Database schema — defines your tables
 │   ├── prisma.config.ts    # Prisma CLI config (not used at runtime)
 │   └── migrations/         # SQL files that create/modify your tables
-│       ├── 20260314..._init/
-│       │   └── migration.sql
-│       └── 20260314..._add_settings/
-│           └── migration.sql
 │
 └── src/
     ├── server.js           # The main application — everything starts here
     ├── lib/
     │   └── prisma.js       # Database connection setup
     └── public/
-        ├── index.html      # The control panel (what you see in the browser)
-        └── login.html      # The login page
+        ├── landing.html    # Tools index page (public, served at /)
+        ├── drop.html       # Dead Drop UI (compose + read views)
+        ├── index.html      # Admin control panel (served at /panel)
+        └── login.html      # Login page
 ```
 
 ### What Each File Does
 
-**`package.json`** — Lists the project's dependencies (libraries it needs) and defines scripts like `npm start` and `npm run dev`. When you run `npm install`, Node.js reads this file and downloads everything listed.
+**`src/server.js`** — The main application file. Sets up Express, defines all routes, handles authentication, serves the Dead Drop and admin panel, and starts listening for requests.
 
-**`.env`** — Your local configuration. Contains your database connection string, admin password, and session secret. This file is in `.gitignore` so it never gets uploaded to GitHub.
+**`src/public/landing.html`** — The public tools index. Lists available tools (currently Dead Drop) with a subtle admin link in the footer.
 
-**`.env.example`** — A template showing what variables `.env` needs, with placeholder values. Safe to commit.
+**`src/public/drop.html`** — The Dead Drop interface. Handles both composing (encrypting and submitting) and reading (fetching and decrypting) drops. All cryptography happens in this file using the Web Crypto API.
 
-**`prisma/schema.prisma`** — Defines the shape of your data. When you write a model here and run a migration, Prisma creates the corresponding table in PostgreSQL.
+**`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, Users, Database, and Settings tabs.
 
-**`prisma/migrations/`** — Each subfolder contains a `migration.sql` file with the SQL that was run to create or change your database tables. These are generated automatically by Prisma and should be committed to Git so that any database can be set up from scratch.
+**`src/public/login.html`** — The admin login page. Submits credentials to `/auth/login` and redirects to `/panel` on success.
 
-**`src/server.js`** — The main application file. It sets up Express, defines all the routes (URLs the server responds to), handles authentication, and starts listening for requests.
+**`src/lib/prisma.js`** — Creates and exports a single database connection. Every part of the app imports this same connection.
 
-**`src/lib/prisma.js`** — Creates and exports a single database connection. Every part of the app imports this same connection instead of creating its own.
+**`prisma/schema.prisma`** — Defines the shape of your data. Models: User, Setting, Paste.
 
-**`src/public/index.html`** — The control panel GUI. It's a single HTML file with embedded CSS and JavaScript that calls the API and renders the results. No build step or framework needed.
-
-**`src/public/login.html`** — The login page. Submits credentials to `/auth/login` and redirects to the control panel on success.
-
-**`render.yaml`** — Tells Render.com how to build and run the app. Render reads this file automatically when you connect your GitHub repository.
+**`render.yaml`** — Tells Render.com how to build and run the app.
 
 ---
 
 ## Getting It Running
 
 ### Prerequisites
-
-You need two things installed:
 
 1. **Node.js** (version 18 or higher) — [nodejs.org](https://nodejs.org)
 2. **PostgreSQL** — install with `sudo apt install postgresql` on Ubuntu
@@ -151,7 +141,7 @@ npm install
 cp .env.example .env
 ```
 
-Now open `.env` in a text editor and fill in real values:
+Edit `.env`:
 ```
 PORT=3000
 DATABASE_URL="postgresql://gabbi:gabbi@localhost:5432/proj1?schema=public"
@@ -160,30 +150,19 @@ ADMIN_USERNAME="admin"
 ADMIN_PASSWORD="your-password-here"
 ```
 
-The `DATABASE_URL` breaks down like this:
-```
-postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE_NAME?schema=public
-             ───┬───  ───┬──  ──┬─ ─┬─  ─────┬─────
-                │       │      │   │        └─ The database to connect to
-                │       │      │   └─ PostgreSQL's default port
-                │       │      └─ localhost = your own machine
-                │       └─ The database user's password
-                └─ The database user
-```
-
 ```bash
 # 3. Create the PostgreSQL user and database
 sudo -u postgres psql -c "CREATE USER gabbi WITH PASSWORD 'gabbi' CREATEDB;"
 sudo -u postgres psql -c "CREATE DATABASE proj1 OWNER gabbi;"
 
 # 4. Run database migrations (creates the tables)
-npx prisma migrate dev --name init
+npx prisma migrate dev
 
 # 5. Start the server
 npm run dev
 ```
 
-Open **http://localhost:3000** in your browser. You'll see a login page. Enter the username and password you set in `.env`.
+Open **http://localhost:3000** — you'll see the tools index with Dead Drop listed. Admin panel is at `/panel`.
 
 ---
 
@@ -191,7 +170,7 @@ Open **http://localhost:3000** in your browser. You'll see a login page. Enter t
 
 ### The Request Lifecycle
 
-When you visit `http://localhost:3000/api/users`, here's what happens:
+When you visit `http://localhost:3000/api/users`:
 
 ```
 Browser sends GET /api/users
@@ -201,10 +180,10 @@ Browser sends GET /api/users
 │                                                     │
 │  1. express.json() — parses JSON request bodies     │
 │  2. express.urlencoded() — parses form data         │
-│  3. session() — loads your session from the cookie   │
-│  4. Request logger — records this request            │
-│  5. requireAuth — checks if you're logged in         │
-│  6. Route handler — runs the code for GET /api/users │
+│  3. session() — loads your session from the cookie  │
+│  4. Request logger — records this request           │
+│  5. requireAuth — checks if you're logged in        │
+│  6. Route handler — runs the code for GET /api/users│
 │                                                     │
 └─────────────────────────────────────────────────────┘
         │
@@ -215,37 +194,21 @@ Prisma queries PostgreSQL: SELECT * FROM "User"
 Server sends JSON response: [{ id: 1, email: "..." }]
 ```
 
+### Route Organization
+
+Routes are split into three groups:
+
+1. **Public routes** (no auth): `/`, `/drop`, `/drop/:id`, `/api/drop`, `/api/drop/:id`, `/auth/*`, `/login.html`
+2. **Auth-protected routes**: everything else — admin panel, API endpoints
+3. **Drop routes are excluded from request logging** for privacy
+
 ### Middleware
 
-Middleware are functions that run *before* your route handler. They sit in the middle (hence the name) between the request arriving and your code running. Each one can:
-
-- Modify the request (e.g., parse JSON from the body)
-- End the request early (e.g., return 401 if not logged in)
-- Pass control to the next middleware with `next()`
-
-The order matters. In this app:
-1. Body parsers run first (so route handlers can read `req.body`)
-2. Session middleware runs next (so auth can check `req.session`)
-3. Request logger records the request
-4. Auth middleware blocks unauthenticated access
-5. Static file server or route handler runs last
-
-### Routes
-
-A route is a URL pattern + HTTP method paired with a handler function:
-
-```javascript
-app.get('/api/users', async (req, res) => {
-  // This runs when someone sends GET /api/users
-  const users = await prisma.user.findMany();
-  res.json(users);
-});
-```
-
-- `app.get()` — handles GET requests (reading data)
-- `app.post()` — handles POST requests (creating data)
-- `app.put()` — handles PUT requests (updating data)
-- `app.delete()` — handles DELETE requests (deleting data)
+Middleware are functions that run *before* your route handler. The order matters:
+1. Body parsers (so handlers can read `req.body`)
+2. Session middleware (so auth can check `req.session`)
+3. Request logger (records the request, skips drop routes)
+4. Auth middleware blocks unauthenticated access to protected routes
 
 ---
 
@@ -253,7 +216,7 @@ app.get('/api/users', async (req, res) => {
 
 ### Schema
 
-The database has three tables (two you defined, one Prisma creates automatically):
+The database has four tables (three you defined, one Prisma creates automatically):
 
 **User** — application data
 | Column | Type | Notes |
@@ -261,74 +224,49 @@ The database has three tables (two you defined, one Prisma creates automatically
 | `id` | Integer | Auto-incrementing primary key |
 | `email` | String | Must be unique |
 | `name` | String | Optional |
-| `createdAt` | DateTime | Set automatically when created |
-| `updatedAt` | DateTime | Set automatically when modified |
+| `createdAt` | DateTime | Set automatically |
+| `updatedAt` | DateTime | Set automatically |
 
 **Setting** — key-value configuration store
 | Column | Type | Notes |
 |--------|------|-------|
-| `key` | String | Primary key (e.g., `admin_password_hash`) |
+| `key` | String | Primary key |
 | `value` | String | The stored value |
-| `updatedAt` | DateTime | Set automatically when modified |
+| `updatedAt` | DateTime | Set automatically |
+
+**Paste** — encrypted drops (Dead Drop)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | String | CUID, auto-generated |
+| `encrypted` | String | AES-256-GCM ciphertext (base64url) |
+| `iv` | String | Initialization vector (base64url) |
+| `burnAfterRead` | Boolean | Delete after first read |
+| `expiresAt` | DateTime | When the drop expires |
+| `createdAt` | DateTime | Set automatically |
 
 **_prisma_migrations** — Prisma's internal tracking table
-| Column | Notes |
-|--------|-------|
-| `migration_name` | Name of the migration (e.g., `20260314_init`) |
-| `started_at` | When it was applied |
-| `finished_at` | When it completed |
 
 ### How Prisma Connects to PostgreSQL
 
-This project uses **Prisma 7**, which works differently from older versions. Instead of a built-in database engine, it uses a **driver adapter** — a thin wrapper around the standard `pg` (node-postgres) library:
+This project uses **Prisma 7** with a **driver adapter** — a thin wrapper around the standard `pg` library:
 
 ```
-Your code
-    │
-    ▼
-Prisma Client — translates .findMany(), .create(), etc. into SQL
-    │
-    ▼
-@prisma/adapter-pg — passes the SQL to the pg driver
-    │
-    ▼
-pg (node-postgres) — sends the SQL over TCP to PostgreSQL
-    │
-    ▼
-PostgreSQL — executes the query and returns results
+Your code → Prisma Client → @prisma/adapter-pg → pg → PostgreSQL
 ```
 
-This is configured in `src/lib/prisma.js`:
-```javascript
-const { PrismaClient } = require('@prisma/client');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
-```
+Configured in `src/lib/prisma.js`.
 
 ### Migrations
 
-A migration is a set of SQL commands that change your database structure. When you add a model to `schema.prisma`, you run:
-
+A migration is a set of SQL commands that change your database structure:
 ```bash
 npx prisma migrate dev --name describe-the-change
 ```
 
-This does three things:
-1. Compares your schema to the current database
-2. Generates a SQL file with the necessary `CREATE TABLE` / `ALTER TABLE` commands
-3. Runs that SQL against your database
-
-The SQL files are saved in `prisma/migrations/` and committed to Git. When someone else clones the project, they run `npx prisma migrate dev` to set up the same database structure.
-
-### Prisma Studio
-
-Prisma includes a visual database browser:
-```bash
-npx prisma studio
-```
-This opens a web UI at `http://localhost:5555` where you can view and edit data directly. Useful for debugging.
+Current migrations:
+1. `init` — creates User table
+2. `add_settings` — creates Setting table
+3. `add_paste_model` — creates Paste table
 
 ---
 
@@ -337,294 +275,248 @@ This opens a web UI at `http://localhost:5555` where you can view and edit data 
 ### How Login Works
 
 ```
-1. You visit http://localhost:3000
-       │
-       ▼
-2. requireAuth middleware sees you have no session
-       │
-       ▼
-3. You're redirected to /login.html
-       │
-       ▼
-4. You enter username + password, click "Sign in"
-       │
-       ▼
-5. Browser sends POST /auth/login { username, password }
-       │
-       ▼
-6. Server verifies the password (see below)
-       │
-       ▼
-7. Server creates a session: req.session.authenticated = true
-       │
-       ▼
-8. Server sends back a cookie: connect.sid=abc123...
-       │
-       ▼
-9. Browser stores the cookie and redirects to /
-       │
-       ▼
-10. Every future request includes the cookie automatically
-        │
-        ▼
-11. requireAuth sees the session is valid — request proceeds
+1. Visit /panel → requireAuth redirects to /login.html
+2. Enter username + password → POST /auth/login
+3. Server verifies password (scrypt hash or env var)
+4. Session created → cookie sent to browser
+5. All future requests include cookie → auth passes
 ```
 
-### Password Verification Flow
-
-The server checks passwords in a specific order:
+### Password Verification
 
 ```
-Is there a password hash stored in the Setting table?
-    │
-    ├── YES → verify against the stored hash (scrypt)
-    │         (the .env password is IGNORED)
-    │
-    └── NO → verify against ADMIN_PASSWORD from .env
-              (constant-time comparison)
+Is there a password hash in the Setting table?
+    ├── YES → verify against stored scrypt hash
+    └── NO → verify against ADMIN_PASSWORD env var
 ```
 
-This means:
-- **First time**: you log in with the password from `.env`
-- **After changing password in Settings**: the new password (stored as a hash in the database) takes over
-- **Recovery**: if you forget the new password, delete the `admin_password_hash` row from the `Setting` table, and the `.env` password works again
+### Security Features
 
-### Password Hashing
-
-Passwords are never stored in plain text. When you change your password, the server:
-
-1. Generates 16 random bytes (the **salt**)
-2. Runs `scrypt(password, salt, 64)` — a deliberately slow algorithm that's hard to brute-force
-3. Stores the result as `salt:hash` in the database
-
-To verify a login, it re-runs scrypt with the same salt and compares the output using `crypto.timingSafeEqual()`, which takes the same amount of time regardless of whether the password is right or wrong (preventing **timing attacks**).
-
-### Session Security
-
-The session cookie has these protections:
-
-| Setting | Value | What It Prevents |
-|---------|-------|-----------------|
-| `httpOnly` | `true` | JavaScript can't read the cookie (prevents XSS cookie theft) |
-| `sameSite` | `lax` | Cookie isn't sent on cross-site POST requests (prevents CSRF) |
-| `secure` | `true` in production | Cookie only sent over HTTPS (prevents network sniffing) |
-| `maxAge` | 8 hours | Session expires automatically |
+- **scrypt password hashing** with random salt
+- **Timing-safe comparison** (prevents timing attacks)
+- **httpOnly cookies** (JavaScript can't read them)
+- **sameSite: lax** (prevents CSRF)
+- **secure: true in production** (HTTPS only)
+- **trust proxy** set for Render's reverse proxy
+- **SQL injection prevention** via Prisma parameterization + table name validation
+- **8-hour session expiry**
 
 ---
 
-## The Control Panel (GUI)
+## Dead Drop — Zero-Knowledge Paste Bin
 
-The control panel is a **single-page application** (SPA) — one HTML file that dynamically updates its content using JavaScript, without full page reloads.
+Dead Drop is the flagship tool. It's designed for sharing sensitive text where even the server operator cannot read the content.
 
-### Dashboard Tab
+### How It Works
 
-- **Status cards**: server uptime, memory usage, total users, Node.js version
-- **Recent Activity**: a live table of API requests showing method, path, HTTP status (color-coded), and response time
-- Auto-refreshes every 5 seconds
-
-### Users Tab
-
-- **Add User form**: enter an email (required) and name (optional)
-- **Users table**: lists all users with inline editing and delete buttons
-- Handles errors like duplicate emails (409) and missing users (404)
-
-### Database Tab
-
-- **Info cards**: database name, size on disk, number of tables, PostgreSQL version
-- **Table Browser**: click any table on the left to see its schema (column names, types, nullable, defaults) and browse its data with pagination (25 rows per page)
-- **Migration History**: shows every migration that has been applied, when, and how many SQL steps it had
-
-### Settings Tab
-
-- **Change Password**: requires current password, new password (min 8 characters), and confirmation
-- **Environment Variables**: shows all env vars with sensitive values (passwords, secrets, keys) masked as bullet characters
-- **System Information**: PID, Node version, OS, CPU count, memory usage, working directory
-
-### How the GUI Talks to the Server
-
-The control panel uses the browser's built-in `fetch()` function to call the API:
-
-```javascript
-// Get all users
-const response = await fetch('/api/users');
-const users = await response.json();
-
-// Create a user
-await fetch('/api/users', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email: 'new@example.com', name: 'New User' }),
-});
+```
+┌─ Your Browser ─────────────────────────────────────┐
+│                                                     │
+│  1. Generate random 256-bit AES key                 │
+│  2. Encrypt text with AES-256-GCM + random IV       │
+│  3. Send ONLY ciphertext + IV to server             │
+│                                                     │
+└────────────────────┬────────────────────────────────┘
+                     │ POST /api/drop { encrypted, iv }
+                     ▼
+┌─ Server ───────────────────────────────────────────┐
+│                                                     │
+│  Stores ciphertext + IV in database                 │
+│  Returns paste ID                                   │
+│  NEVER sees the key or plaintext                    │
+│                                                     │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+   URL: /drop/abc123#<base64url-encoded-key>
+                      ─────────┬──────────
+                               │
+              The # fragment is NEVER sent to the server
+              Only the link holder can decrypt
 ```
 
-If any API call returns `401 Unauthorized` (session expired), the page automatically redirects to the login screen.
+### Key Design Decisions
+
+- **Key in URL fragment**: Browsers never transmit the `#fragment` portion of a URL to the server. The decryption key lives there.
+- **No logging on drop routes**: Drop creation and retrieval are excluded from the request log. No IPs, timestamps, or user agents are recorded.
+- **No cookies on drop routes**: Sessions are not used for drop operations.
+- **Burn after reading**: The database row is deleted immediately after the first retrieval.
+- **Auto-expiry**: Expired drops are deleted on access and can be bulk-purged by the admin.
+- **256 KB limit**: Prevents abuse of storage.
+- **`<meta name="referrer" content="no-referrer">`**: Prevents the browser from leaking the URL (including the key) to other sites.
+
+### Expiry Options
+
+| Value | Duration |
+|-------|----------|
+| `1h` | 1 hour |
+| `24h` | 24 hours (default) |
+| `7d` | 7 days |
+| `30d` | 30 days |
+
+---
+
+## The Admin Panel
+
+The admin panel at `/panel` is a single-page application with five tabs. All pages use a dark monospace theme.
+
+### Dashboard
+
+- Status cards: uptime, memory, user count, active drops
+- Live request log (auto-refreshes every 5 seconds)
+- Drop routes are excluded from the log for privacy
+
+### Drops
+
+- Stats: total, active, expired, burn-on-read counts
+- Table of all drops: ID, status (active/expired), type (standard/burn), expiry countdown, creation date
+- Actions: delete individual drops, purge all expired
+- Note: admin cannot read drop contents (zero-knowledge)
+
+### Users
+
+- Add users (email + optional name)
+- Inline editing
+- Delete with confirmation
+
+### Database
+
+- Info cards: database name, size, table count, PostgreSQL version
+- Table browser: sidebar with tables, click to view schema + paginated data
+- Migration history
+
+### Settings
+
+- Change admin password
+- View environment variables (sensitive values masked)
+- System information (PID, Node version, OS, memory, etc.)
 
 ---
 
 ## The API
 
-Every endpoint returns JSON. All endpoints except `/auth/*` require an authenticated session.
+Every endpoint returns JSON.
 
-### Auth Endpoints
+### Public Endpoints (no auth)
 
-| Method | URL | Request Body | What It Does |
-|--------|-----|-------------|--------------|
-| `POST` | `/auth/login` | `{ username, password }` | Log in, receive a session cookie |
-| `POST` | `/auth/logout` | (none) | Destroy the session |
-| `GET` | `/auth/check` | (none) | Returns `{ authenticated: true/false }` |
-| `POST` | `/auth/change-password` | `{ currentPassword, newPassword }` | Change the admin password (min 8 chars) |
+| Method | URL | Body | Description |
+|--------|-----|------|-------------|
+| `POST` | `/api/drop` | `{ encrypted, iv, burn?, expiry? }` | Create a drop |
+| `GET` | `/api/drop/:id` | — | Retrieve a drop (burns if flagged) |
+| `POST` | `/auth/login` | `{ username, password }` | Log in |
+| `POST` | `/auth/logout` | — | Log out |
+| `GET` | `/auth/check` | — | Check auth status |
+| `POST` | `/auth/change-password` | `{ currentPassword, newPassword }` | Change password (requires auth) |
 
-### User Endpoints
+### Admin Endpoints (auth required)
 
-| Method | URL | Request Body | What It Does |
-|--------|-----|-------------|--------------|
-| `GET` | `/api/users` | — | List all users |
-| `GET` | `/api/users/:id` | — | Get one user by ID |
-| `POST` | `/api/users` | `{ email, name? }` | Create a user (email must be unique) |
-| `PUT` | `/api/users/:id` | `{ email?, name? }` | Update a user |
-| `DELETE` | `/api/users/:id` | — | Delete a user |
-
-### Server & Database Endpoints
-
-| Method | URL | What It Returns |
-|--------|-----|----------------|
-| `GET` | `/api/status` | Uptime, memory, user count, Node version |
-| `GET` | `/api/db/info` | Database name, user, PostgreSQL version, size |
-| `GET` | `/api/db/tables` | List of tables with row counts |
-| `GET` | `/api/db/tables/:name?page=1&limit=25` | Table schema + paginated data |
+| Method | URL | Description |
+|--------|-----|-------------|
+| `GET` | `/api/status` | Server health |
+| `GET` | `/api/users` | List users |
+| `GET` | `/api/users/:id` | Get user |
+| `POST` | `/api/users` | Create user (`{ email, name? }`) |
+| `PUT` | `/api/users/:id` | Update user |
+| `DELETE` | `/api/users/:id` | Delete user |
+| `GET` | `/api/drops` | List drops (metadata only) |
+| `GET` | `/api/drops/stats` | Drop statistics |
+| `DELETE` | `/api/drops/:id` | Delete a drop |
+| `POST` | `/api/drops/purge-expired` | Purge expired drops |
+| `GET` | `/api/db/info` | Database info |
+| `GET` | `/api/db/tables` | List tables |
+| `GET` | `/api/db/tables/:name` | Table data (`?page=1&limit=25`) |
 | `GET` | `/api/db/migrations` | Migration history |
-| `GET` | `/api/system` | System info + environment variables (sensitive masked) |
-| `GET` | `/api/logs` | Recent request log (last 200, in-memory) |
+| `GET` | `/api/system` | System info + env vars |
+| `GET` | `/api/logs` | Request log (last 200) |
 
 ### HTTP Status Codes
 
 | Code | Meaning | When You'll See It |
 |------|---------|-------------------|
 | `200` | OK | Successful read or update |
-| `201` | Created | New user created successfully |
-| `204` | No Content | User deleted successfully |
-| `400` | Bad Request | Missing required field (e.g., no email) |
-| `401` | Unauthorized | Not logged in, or wrong password |
-| `404` | Not Found | User or table doesn't exist |
-| `409` | Conflict | Email already exists (unique constraint) |
-| `500` | Server Error | Database connection failed or internal error |
+| `201` | Created | New user or drop created |
+| `204` | No Content | Successful delete |
+| `400` | Bad Request | Missing required field |
+| `401` | Unauthorized | Not logged in or wrong password |
+| `404` | Not Found | Resource doesn't exist or expired |
+| `409` | Conflict | Email already exists |
+| `413` | Payload Too Large | Drop exceeds 256 KB |
+| `500` | Server Error | Database connection failed |
 
-### Testing the API with curl
+### Testing with curl
 
 ```bash
-# Log in and save the session cookie
+# Create a drop (normally done client-side, but for testing)
+curl -X POST http://localhost:3000/api/drop \
+  -H 'Content-Type: application/json' \
+  -d '{"encrypted":"test","iv":"test","expiry":"1h"}'
+
+# Admin login
 curl -c cookies.txt -X POST http://localhost:3000/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"your-password"}'
 
-# Use the cookie for subsequent requests
-curl -b cookies.txt http://localhost:3000/api/users
-
-curl -b cookies.txt -X POST http://localhost:3000/api/users \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"hello@example.com","name":"Test User"}'
-
-curl -b cookies.txt http://localhost:3000/api/db/info
+# Admin: list drops
+curl -b cookies.txt http://localhost:3000/api/drops
 ```
 
 ---
 
 ## Deploying to the Internet
 
-This project is configured for **Render.com**, a hosting platform that can run Node.js apps and PostgreSQL databases.
+### Render Deployment
 
-### What Happens on Deploy
+The app is deployed on Render at `https://server-express-u3tu.onrender.com`.
 
-The `render.yaml` file tells Render:
+The `render.yaml` file configures:
 ```yaml
 buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
 startCommand: npm start
 ```
 
-1. **`npm install`** — downloads all dependencies
-2. **`npx prisma generate`** — generates the Prisma Client code
-3. **`npx prisma migrate deploy`** — applies any pending migrations to the production database
-4. **`npm start`** — runs `node src/server.js`
-
-### Step-by-Step Deployment
-
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) and create a free account
-3. Create a **PostgreSQL** database — copy the **Internal Database URL**
-4. Create a **Web Service** — connect your GitHub repo
-5. Render detects `render.yaml` automatically
-6. Under **Environment**, add these secrets:
+### Environment Variables on Render
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | The internal database URL from step 3 |
-| `ADMIN_PASSWORD` | A strong password for the control panel |
-| `SESSION_SECRET` | A long random string (e.g., run `openssl rand -hex 32`) |
+| `DATABASE_URL` | Internal Database URL from Render PostgreSQL |
+| `ADMIN_PASSWORD` | Admin login password |
+| `SESSION_SECRET` | Random string for session signing |
+| `NODE_ENV` | `production` (set in render.yaml) |
 
-7. Click **Deploy** — Render builds and starts the app
-8. Visit your app's URL (e.g., `https://proj1-xxxx.onrender.com`)
-
-Render automatically redeploys when you push new commits to GitHub.
+Auto-deploys on push to `main`.
 
 ---
 
 ## Common Tasks
 
+### Add a New Tool
+
+1. Create the HTML file in `src/public/` (follow the dark monospace theme)
+2. Add public routes in `src/server.js` before the `requireAuth` middleware
+3. Add a card to `src/public/landing.html` linking to the new tool
+4. If it needs database storage, add a Prisma model and migrate
+
 ### Add a New Database Table
 
-1. Edit `prisma/schema.prisma` — add a new model:
-   ```prisma
-   model Post {
-     id        Int      @id @default(autoincrement())
-     title     String
-     content   String?
-     createdAt DateTime @default(now())
-   }
-   ```
-
-2. Generate and apply the migration:
-   ```bash
-   npx prisma migrate dev --name add-posts
-   ```
-
-3. Use it in your code:
-   ```javascript
-   const posts = await prisma.post.findMany();
-   ```
-
-### Add a New API Route
-
-Add it in `src/server.js` after the existing routes, before `app.listen()`:
-
-```javascript
-app.get('/api/posts', async (req, res) => {
-  const posts = await prisma.post.findMany();
-  res.json(posts);
-});
-```
-
-Since it's placed after `requireAuth`, it's automatically protected.
+1. Add a model to `prisma/schema.prisma`
+2. Run `npx prisma migrate dev --name describe-change`
+3. Use it: `const items = await prisma.modelName.findMany();`
 
 ### Reset a Forgotten Admin Password
 
-If you changed the password in Settings and forgot it:
 ```bash
-# Connect to the database and delete the password override
 psql proj1 -c "DELETE FROM \"Setting\" WHERE key = 'admin_password_hash';"
 ```
 
-Now the password from `.env` (`ADMIN_PASSWORD`) works again.
+The `ADMIN_PASSWORD` env var works again.
 
-### View Raw Database Data
+### Purge Expired Drops
 
+Via admin panel: Drops tab > "Purge Expired" button.
+
+Via API:
 ```bash
-# Prisma's built-in browser
-npx prisma studio
-
-# Or use psql directly
-psql proj1
-\dt              -- list tables
-SELECT * FROM "User";
+curl -b cookies.txt -X POST http://localhost:3000/api/drops/purge-expired
 ```
 
 ---
@@ -632,40 +524,19 @@ SELECT * FROM "User";
 ## Troubleshooting
 
 ### "ADMIN_PASSWORD env var is required"
+Set `ADMIN_PASSWORD` in `.env`.
 
-You haven't set `ADMIN_PASSWORD` in your `.env` file. Copy the example and fill it in:
-```bash
-cp .env.example .env
-# Then edit .env and set ADMIN_PASSWORD
-```
-
-### "Cannot find module '../generated/prisma'"
-
-The Prisma client hasn't been generated. Run:
-```bash
-npx prisma generate
-```
+### "Cannot find module '.prisma/client/default'"
+Run `npx prisma generate`.
 
 ### "Can't reach database server at localhost:5432"
+Start PostgreSQL: `sudo systemctl start postgresql`
 
-PostgreSQL isn't running. Start it:
-```bash
-sudo systemctl start postgresql
-```
+### Login doesn't work on Render
+Ensure `trust proxy` is set (it is). Check that `NODE_ENV=production` is set so secure cookies work over HTTPS.
 
-### "relation 'User' does not exist"
+### Drops show "Not found" immediately
+The drop expired or was burned. Expired drops are deleted on access.
 
-The migrations haven't been applied. Run:
-```bash
-npx prisma migrate dev
-```
-
-### "P2002: Unique constraint violation"
-
-You tried to create a user with an email that already exists. Each email must be unique.
-
-### The server starts but the control panel shows "Loading..."
-
-Check the browser's developer console (F12 > Console tab) for errors. Common causes:
-- The API is returning 401 (session expired — try logging in again)
-- The database is unreachable (check `DATABASE_URL` in `.env`)
+### The admin panel shows "Loading..."
+Check browser console (F12). Likely a 401 (session expired) or database connection issue.
