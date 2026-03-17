@@ -165,7 +165,16 @@ function requireAuth(req, res, next) {
   res.redirect('/login.html');
 }
 
+app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+}));
+
+// Public routes (no auth required)
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
+app.use('/landing.html', express.static(path.join(__dirname, 'public', 'landing.html')));
+
+// Everything else requires auth
 app.use(requireAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 

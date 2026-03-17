@@ -130,7 +130,7 @@
   <script>
     // If already authenticated, go straight to the panel
     fetch('/auth/check').then(r => r.json()).then(d => {
-      if (d.authenticated) window.location.href = '/';
+      if (d.authenticated) window.location.href = '/panel';
     });
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -152,7 +152,7 @@
         });
 
         if (res.ok) {
-          window.location.href = '/';
+          window.location.href = '/panel';
         } else {
           const data = await res.json();
           errEl.textContent = data.error || 'Login failed';
