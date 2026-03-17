@@ -89,7 +89,7 @@ app.use(session({
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check') return;
+    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check' || req.path.startsWith('/drop') || req.path.startsWith('/api/drop')) return;
     requestLog.unshift({
       time: new Date().toISOString(),
       method: req.method,
@@ -173,6 +173,53 @@ app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
 app.use('/landing.html', express.static(path.join(__dirname, 'public', 'landing.html')));
+
+// --- Dead Drop (anonymous paste bin) ---
+
+const PASTE_MAX_SIZE = 256 * 1024; // 256 KB
+const PASTE_EXPIRY_OPTIONS = {
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+app.get('/drop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
+app.get('/drop/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
+
+app.post('/api/drop', async (req, res) => {
+  const { encrypted, iv, burn, expiry } = req.body;
+  if (!encrypted || !iv) {
+    return res.status(400).json({ error: 'Missing encrypted data' });
+  }
+  if (encrypted.length > PASTE_MAX_SIZE) {
+    return res.status(413).json({ error: 'Paste too large (256 KB max)' });
+  }
+  const ttl = PASTE_EXPIRY_OPTIONS[expiry] || PASTE_EXPIRY_OPTIONS['24h'];
+  const paste = await prisma.paste.create({
+    data: {
+      encrypted,
+      iv,
+      burnAfterRead: !!burn,
+      expiresAt: new Date(Date.now() + ttl),
+    },
+  });
+  res.status(201).json({ id: paste.id });
+});
+
+app.get('/api/drop/:id', async (req, res) => {
+  const paste = await prisma.paste.findUnique({
+    where: { id: req.params.id },
+  });
+  if (!paste || paste.expiresAt < new Date()) {
+    if (paste) await prisma.paste.delete({ where: { id: paste.id } }).catch(() => {});
+    return res.status(404).json({ error: 'Paste not found or expired' });
+  }
+  if (paste.burnAfterRead) {
+    await prisma.paste.delete({ where: { id: paste.id } }).catch(() => {});
+  }
+  res.json({ encrypted: paste.encrypted, iv: paste.iv, burn: paste.burnAfterRead });
+});
 
 // Everything else requires auth
 app.use(requireAuth);

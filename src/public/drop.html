@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dead Drop</title>
+  <meta name="referrer" content="no-referrer">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 700px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 20px;
+      flex: 1;
+    }
+
+    header {
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      font-size: 12px;
+      color: #505050;
+    }
+
+    .notice {
+      background: #0d1a0d;
+      border: 1px solid #1a331a;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 11px;
+      color: #4a8c4a;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .notice strong { color: #6abf6a; }
+
+    textarea {
+      width: 100%;
+      min-height: 240px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      color: #d0d0d0;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 16px;
+      resize: vertical;
+      outline: none;
+      line-height: 1.5;
+    }
+
+    textarea:focus { border-color: #333; }
+    textarea::placeholder { color: #333; }
+
+    .options {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .options label {
+      font-size: 12px;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    select {
+      background: #111;
+      border: 1px solid #222;
+      color: #a0a0a0;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus { border-color: #333; }
+
+    input[type="checkbox"] {
+      accent-color: #c0392b;
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      background: #1a1a1a;
+      color: #a0a0a0;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { background: #222; color: #e0e0e0; border-color: #444; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-destroy {
+      background: #1a0d0d;
+      border-color: #331a1a;
+      color: #c0392b;
+    }
+
+    .btn-destroy:hover { background: #2a1010; border-color: #4a1a1a; }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .result {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .result-url {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #6abf6a;
+      word-break: break-all;
+      cursor: pointer;
+      position: relative;
+      line-height: 1.5;
+    }
+
+    .result-url:hover { border-color: #333; }
+
+    .result-url .copy-hint {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .result-warn {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #8c4a4a;
+    }
+
+    /* Reading view */
+    .read-view { display: none; }
+
+    .read-content {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 20px;
+      font-size: 13px;
+      color: #d0d0d0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.6;
+      min-height: 120px;
+    }
+
+    .burned-notice {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #c0392b;
+      display: none;
+    }
+
+    .error-view {
+      display: none;
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .error-view h2 {
+      font-size: 16px;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .error-view p {
+      font-size: 12px;
+      color: #444;
+    }
+
+    .error-view .btn { margin-top: 24px; }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 10px;
+      color: #282828;
+      letter-spacing: 1px;
+    }
+
+    .security-info {
+      margin-top: 32px;
+      border-top: 1px solid #181818;
+      padding-top: 20px;
+    }
+
+    .security-info summary {
+      font-size: 11px;
+      color: #444;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      outline: none;
+    }
+
+    .security-info summary:hover { color: #666; }
+
+    .security-info .detail {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #383838;
+      line-height: 1.8;
+    }
+
+    .security-info .detail code {
+      color: #505050;
+      background: #111;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    @media (max-width: 500px) {
+      .options { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Dead Drop</h1>
+      <p>zero-knowledge encrypted paste bin</p>
+    </header>
+
+    <!-- COMPOSE VIEW -->
+    <div class="compose-view" id="composeView">
+      <div class="notice">
+        <strong>Zero knowledge.</strong> Your text is encrypted in your browser before it reaches the server.
+        The decryption key is in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
+        The server cannot read your content. Nobody can, except whoever has the link.
+      </div>
+
+      <textarea id="content" placeholder="Type or paste your message here..." autofocus spellcheck="false" autocomplete="off"></textarea>
+
+      <div class="options">
+        <label>
+          Expires:
+          <select id="expiry">
+            <option value="1h">1 hour</option>
+            <option value="24h" selected>24 hours</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" id="burn">
+          Burn after reading
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="encryptBtn">Encrypt &amp; Drop</button>
+      </div>
+
+      <div class="result" id="result">
+        <div class="result-url" id="resultUrl" title="Click to copy">
+          <span class="copy-hint">click to copy</span>
+          <span id="resultUrlText"></span>
+        </div>
+        <p class="result-warn" id="resultWarn"></p>
+      </div>
+
+      <div class="security-info">
+        <details>
+          <summary>How it works</summary>
+          <div class="detail">
+            1. Your text is encrypted with <code>AES-256-GCM</code> using the Web Crypto API<br>
+            2. A random 256-bit key is generated in your browser<br>
+            3. Only the encrypted ciphertext is sent to the server<br>
+            4. The key is placed in the URL fragment (<code>#</code>), which browsers never transmit<br>
+            5. When someone opens the link, the key is read from the fragment and used to decrypt locally<br>
+            6. The server never sees the plaintext or the key &mdash; even if compromised<br>
+            7. Burn-after-reading pastes are deleted from the database immediately after one retrieval<br>
+            8. No IP addresses, no cookies, no user agents, no analytics are recorded for drops<br>
+            9. Expired pastes are deleted on access &mdash; they cannot be recovered
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- READ VIEW -->
+    <div class="read-view" id="readView">
+      <div class="read-content" id="readContent"></div>
+      <p class="burned-notice" id="burnedNotice">This message has been destroyed. It cannot be viewed again.</p>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn" id="copyContentBtn">Copy to clipboard</button>
+        <a href="/drop" class="btn" style="text-decoration:none">New drop</a>
+      </div>
+    </div>
+
+    <!-- ERROR VIEW -->
+    <div class="error-view" id="errorView">
+      <h2 id="errorTitle">Not found</h2>
+      <p id="errorDesc">This drop has expired, been burned, or never existed.</p>
+      <a href="/drop" class="btn" style="text-decoration:none">Create a new drop</a>
+    </div>
+  </div>
+
+  <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
+
+  <script>
+    const composeView = document.getElementById('composeView');
+    const readView = document.getElementById('readView');
+    const errorView = document.getElementById('errorView');
+
+    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+
+    async function generateKey() {
+      const key = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      const raw = await crypto.subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+    }
+
+    async function importKey(encoded) {
+      const raw = base64ToBuf(encoded);
+      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt']);
+    }
+
+    async function encrypt(text, key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encoded = new TextEncoder().encode(text);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encoded
+      );
+      return {
+        encrypted: bufToBase64(new Uint8Array(ciphertext)),
+        iv: bufToBase64(iv),
+      };
+    }
+
+    async function decrypt(encryptedB64, ivB64, key) {
+      const ciphertext = base64ToBuf(encryptedB64);
+      const iv = base64ToBuf(ivB64);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+      );
+      return new TextDecoder().decode(decrypted);
+    }
+
+    function bufToBase64(buf) {
+      let binary = '';
+      for (const b of buf) binary += String.fromCharCode(b);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64ToBuf(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      const binary = atob(b64);
+      const buf = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+      return buf;
+    }
+
+    // --- Compose mode ---
+
+    document.getElementById('encryptBtn').addEventListener('click', async () => {
+      const content = document.getElementById('content').value.trim();
+      if (!content) return;
+
+      const btn = document.getElementById('encryptBtn');
+      btn.disabled = true;
+      btn.textContent = 'Encrypting...';
+
+      try {
+        const { key, encoded: keyStr } = await generateKey();
+        const { encrypted, iv } = await encrypt(content, key);
+
+        const res = await fetch('/api/drop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            encrypted,
+            iv,
+            burn: document.getElementById('burn').checked,
+            expiry: document.getElementById('expiry').value,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to create drop');
+        }
+
+        const { id } = await res.json();
+        const url = `${location.origin}/drop/${id}#${keyStr}`;
+
+        document.getElementById('resultUrlText').textContent = url;
+        document.getElementById('result').style.display = 'block';
+
+        if (document.getElementById('burn').checked) {
+          document.getElementById('resultWarn').textContent =
+            'This drop will self-destruct after being read once. Save this link now.';
+        } else {
+          document.getElementById('resultWarn').textContent = '';
+        }
+
+        // Clear the textarea
+        document.getElementById('content').value = '';
+      } catch (err) {
+        alert(err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Encrypt & Drop';
+    });
+
+    document.getElementById('resultUrl').addEventListener('click', () => {
+      const url = document.getElementById('resultUrlText').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        const hint = document.querySelector('.copy-hint');
+        hint.textContent = 'copied';
+        setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+      });
+    });
+
+    document.getElementById('copyContentBtn').addEventListener('click', () => {
+      const text = document.getElementById('readContent').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyContentBtn');
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000);
+      });
+    });
+
+    // --- Read mode ---
+
+    async function loadPaste() {
+      const match = location.pathname.match(/^\/drop\/(.+)$/);
+      if (!match) return;
+
+      const id = match[1];
+      const keyStr = location.hash.slice(1);
+
+      if (!keyStr) {
+        showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');
+        return;
+      }
+
+      composeView.style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/drop/${id}`);
+        if (!res.ok) {
+          showError('Not found', 'This drop has expired, been burned, or never existed.');
+          return;
+        }
+
+        const data = await res.json();
+        const key = await importKey(keyStr);
+        const plaintext = await decrypt(data.encrypted, data.iv, key);
+
+        document.getElementById('readContent').textContent = plaintext;
+        readView.style.display = 'block';
+
+        if (data.burn) {
+          document.getElementById('burnedNotice').style.display = 'block';
+        }
+      } catch (err) {
+        showError('Decryption failed', 'The key is invalid or the data has been corrupted.');
+      }
+    }
+
+    function showError(title, desc) {
+      composeView.style.display = 'none';
+      readView.style.display = 'none';
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorDesc').textContent = desc;
+      errorView.style.display = 'block';
+    }
+
+    // Route
+    if (location.pathname.match(/^\/drop\/.+$/)) {
+      loadPaste();
+    }
+  </script>
+</body>
+</html>

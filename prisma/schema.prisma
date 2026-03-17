@@ -19,3 +19,12 @@ model Setting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+model Paste {
+  id             String   @id @default(cuid())
+  encrypted      String
+  iv             String
+  burnAfterRead  Boolean  @default(false)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+}
