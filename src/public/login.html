@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Control Panel</title>
+  <title>Admin Login</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f1117;
-      color: #e1e4e8;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -18,103 +18,103 @@
     }
 
     .login-card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 40px;
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      padding: 32px;
       width: 100%;
-      max-width: 380px;
+      max-width: 340px;
     }
 
     .login-card h1 {
-      font-size: 20px;
+      font-size: 13px;
       font-weight: 600;
-      color: #f0f6fc;
+      color: #e0e0e0;
       text-align: center;
-      margin-bottom: 8px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
     }
 
     .login-card p {
-      font-size: 13px;
-      color: #8b949e;
+      font-size: 11px;
+      color: #333;
       text-align: center;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
     label {
       display: block;
-      font-size: 13px;
+      font-size: 10px;
       font-weight: 500;
-      color: #e1e4e8;
-      margin-bottom: 6px;
+      color: #555;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
     }
 
     input {
       width: 100%;
-      padding: 10px 12px;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      color: #e1e4e8;
-      font-size: 14px;
+      padding: 8px 10px;
+      background: #0a0a0a;
+      border: 1px solid #222;
+      border-radius: 3px;
+      color: #d0d0d0;
+      font-family: inherit;
+      font-size: 12px;
       outline: none;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
-    input:focus {
-      border-color: #58a6ff;
-    }
-
-    input::placeholder {
-      color: #484f58;
-    }
+    input:focus { border-color: #333; }
+    input::placeholder { color: #282828; }
 
     .btn {
       width: 100%;
-      padding: 10px 16px;
-      background: #238636;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
+      padding: 8px 14px;
+      background: #0d1a0d;
+      color: #4a8c4a;
+      border: 1px solid #1a331a;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 11px;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.15s;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.15s;
     }
 
-    .btn:hover { background: #2ea043; }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn:hover { background: #143014; color: #6abf6a; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
     .error-msg {
-      background: #2d1214;
-      border: 1px solid #f8514933;
-      color: #f85149;
-      border-radius: 6px;
-      padding: 10px 12px;
-      font-size: 13px;
-      margin-bottom: 16px;
+      background: #1a0d0d;
+      border: 1px solid #331a1a;
+      color: #8c4a4a;
+      border-radius: 3px;
+      padding: 8px 10px;
+      font-size: 11px;
+      margin-bottom: 14px;
       display: none;
     }
 
-    .lock-icon {
+    .back-link {
+      display: block;
       text-align: center;
-      margin-bottom: 16px;
+      margin-top: 16px;
+      font-size: 10px;
+      color: #282828;
     }
 
-    .lock-icon svg {
-      width: 40px;
-      height: 40px;
-      fill: #8b949e;
-    }
+    .back-link a { color: #333; text-decoration: none; }
+    .back-link a:hover { color: #555; }
   </style>
 </head>
 <body>
   <form class="login-card" id="loginForm" autocomplete="on">
-    <div class="lock-icon">
-      <svg viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v2H8V7c0-2.276 1.724-4 4-4zm-7 8h14v9H5v-9zm7 2a2 2 0 0 0-1 3.732V18a1 1 0 1 0 2 0v-1.268A2 2 0 0 0 12 13z"/></svg>
-    </div>
-    <h1>Control Panel</h1>
-    <p>Sign in to continue</p>
+    <h1>Admin</h1>
+    <p>authenticate to continue</p>
 
     <div class="error-msg" id="errorMsg"></div>
 
@@ -124,11 +124,12 @@
     <label for="password">Password</label>
     <input type="password" id="password" name="password" autocomplete="current-password" required>
 
-    <button type="submit" class="btn" id="loginBtn">Sign in</button>
+    <button type="submit" class="btn" id="loginBtn">Authenticate</button>
+
+    <div class="back-link"><a href="/">&larr; back to tools</a></div>
   </form>
 
   <script>
-    // If already authenticated, go straight to the panel
     fetch('/auth/check').then(r => r.json()).then(d => {
       if (d.authenticated) window.location.href = '/panel';
     });
@@ -139,7 +140,7 @@
       const errEl = document.getElementById('errorMsg');
       errEl.style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Signing in...';
+      btn.textContent = 'Authenticating...';
 
       try {
         const res = await fetch('/auth/login', {
@@ -155,18 +156,18 @@
           window.location.href = '/panel';
         } else {
           const data = await res.json();
-          errEl.textContent = data.error || 'Login failed';
+          errEl.textContent = data.error || 'Authentication failed';
           errEl.style.display = 'block';
           document.getElementById('password').value = '';
           document.getElementById('password').focus();
         }
       } catch {
-        errEl.textContent = 'Connection error. Is the server running?';
+        errEl.textContent = 'Connection error.';
         errEl.style.display = 'block';
       }
 
       btn.disabled = false;
-      btn.textContent = 'Sign in';
+      btn.textContent = 'Authenticate';
     });
   </script>
 </body>

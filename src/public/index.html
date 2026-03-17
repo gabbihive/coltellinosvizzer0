@@ -3,221 +3,255 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Panel</title>
+  <title>Admin</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f1117;
-      color: #e1e4e8;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
       min-height: 100vh;
     }
 
+    /* Header */
     header {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      border-bottom: 1px solid #1a1a1a;
       padding: 16px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
-
-    header h1 { font-size: 18px; font-weight: 600; color: #f0f6fc; }
-
-    .status-dot {
-      width: 8px; height: 8px; background: #3fb950; border-radius: 50%;
-      display: inline-block; margin-right: 8px;
-      animation: pulse 2s infinite;
+    header h1 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
     }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    header .dot {
+      width: 6px; height: 6px; background: #4a8c4a;
+      border-radius: 50%; display: inline-block; margin-right: 8px;
+    }
+    .header-right {
+      display: flex; align-items: center; gap: 16px;
+      font-size: 11px; color: #333;
+    }
 
     /* Tabs */
     .tabs {
       display: flex;
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      border-bottom: 1px solid #1a1a1a;
       padding: 0 24px;
+      background: #0d0d0d;
     }
     .tab {
-      padding: 12px 16px;
+      padding: 10px 16px;
       background: none; border: none;
-      color: #8b949e; cursor: pointer;
-      font-size: 14px; font-weight: 500;
-      border-bottom: 2px solid transparent;
+      color: #444; cursor: pointer;
+      font-family: inherit;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-bottom: 1px solid transparent;
       margin-bottom: -1px;
       transition: color .15s;
     }
-    .tab:hover { color: #e1e4e8; }
-    .tab.active { color: #f0f6fc; border-bottom-color: #f78166; }
+    .tab:hover { color: #888; }
+    .tab.active { color: #e0e0e0; border-bottom-color: #4a8c4a; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    .container { max-width: 1060px; margin: 0 auto; padding: 24px; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
 
     /* Cards */
     .cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px; margin-bottom: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 24px;
     }
     .card {
-      background: #161b22; border: 1px solid #30363d;
-      border-radius: 8px; padding: 20px;
+      background: #111; border: 1px solid #1a1a1a;
+      border-radius: 4px; padding: 16px;
     }
     .card .label {
-      font-size: 12px; text-transform: uppercase;
-      letter-spacing: .5px; color: #8b949e; margin-bottom: 8px;
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 1px; color: #444; margin-bottom: 8px;
     }
-    .card .value { font-size: 28px; font-weight: 600; color: #f0f6fc; }
-    .card .unit { font-size: 14px; font-weight: 400; color: #8b949e; }
+    .card .value { font-size: 24px; font-weight: 600; color: #e0e0e0; }
+    .card .unit { font-size: 12px; font-weight: 400; color: #555; }
 
     /* Sections */
     .section {
-      background: #161b22; border: 1px solid #30363d;
-      border-radius: 8px; margin-bottom: 24px;
+      background: #111; border: 1px solid #1a1a1a;
+      border-radius: 4px; margin-bottom: 24px;
     }
     .section-header {
-      padding: 16px 20px; border-bottom: 1px solid #30363d;
+      padding: 12px 16px; border-bottom: 1px solid #1a1a1a;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .section-header h2 { font-size: 16px; font-weight: 600; }
+    .section-header h2 {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 1px; text-transform: uppercase; color: #666;
+    }
 
     /* Forms */
     .form-row {
-      display: flex; gap: 12px;
-      padding: 16px 20px; border-bottom: 1px solid #21262d;
+      display: flex; gap: 8px;
+      padding: 12px 16px; border-bottom: 1px solid #151515;
     }
     input[type="text"], input[type="email"], input[type="password"] {
-      padding: 8px 12px; background: #0d1117;
-      border: 1px solid #30363d; border-radius: 6px;
-      color: #e1e4e8; font-size: 14px; outline: none;
+      padding: 7px 10px; background: #0a0a0a;
+      border: 1px solid #222; border-radius: 3px;
+      color: #d0d0d0; font-family: inherit;
+      font-size: 12px; outline: none;
     }
-    input:focus { border-color: #58a6ff; }
-    input::placeholder { color: #484f58; }
+    input:focus { border-color: #333; }
+    input::placeholder { color: #333; }
     .form-row input { flex: 1; }
 
     /* Buttons */
     .btn {
-      padding: 8px 16px; border: 1px solid transparent;
-      border-radius: 6px; font-size: 14px; font-weight: 500;
-      cursor: pointer; transition: background .15s;
+      padding: 7px 14px; border: 1px solid #222;
+      border-radius: 3px; font-family: inherit;
+      font-size: 11px; font-weight: 500;
+      cursor: pointer; transition: all .15s;
+      background: #1a1a1a; color: #a0a0a0;
+      letter-spacing: 0.5px; text-transform: uppercase;
     }
-    .btn-primary { background: #238636; color: #fff; }
-    .btn-primary:hover { background: #2ea043; }
-    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
-    .btn-edit { background: transparent; color: #58a6ff; border-color: #30363d; }
-    .btn-edit:hover { background: #1f2937; }
-    .btn-edit:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-danger { background: transparent; color: #f85149; border-color: #30363d; }
-    .btn-danger:hover { background: #2d1214; }
-    .btn-cancel { background: transparent; color: #8b949e; border-color: #30363d; }
-    .btn-cancel:hover { background: #1f2937; }
-    .btn-ghost { background: transparent; color: #8b949e; border-color: #30363d; }
-    .btn-ghost:hover { background: #1f2937; }
+    .btn:hover { background: #222; color: #e0e0e0; border-color: #333; }
+    .btn:disabled { opacity: .3; cursor: not-allowed; }
+    .btn-primary { background: #0d1a0d; color: #4a8c4a; border-color: #1a331a; }
+    .btn-primary:hover { background: #143014; color: #6abf6a; }
+    .btn-sm { padding: 4px 10px; font-size: 10px; }
+    .btn-danger { background: #1a0d0d; color: #8c4a4a; border-color: #331a1a; }
+    .btn-danger:hover { background: #2a1010; color: #c06060; }
+    .btn-ghost { background: transparent; color: #444; border-color: #222; }
+    .btn-ghost:hover { color: #888; background: #151515; }
 
     /* Tables */
     table { width: 100%; border-collapse: collapse; }
     th {
-      text-align: left; padding: 10px 20px; font-size: 12px;
-      text-transform: uppercase; letter-spacing: .5px;
-      color: #8b949e; border-bottom: 1px solid #21262d;
+      text-align: left; padding: 8px 16px; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: #444; border-bottom: 1px solid #1a1a1a;
     }
-    td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid #21262d; }
+    td { padding: 10px 16px; font-size: 12px; border-bottom: 1px solid #151515; }
     tr:last-child td { border-bottom: none; }
-    .actions { display: flex; gap: 8px; justify-content: flex-end; }
-    .empty-state { padding: 40px 20px; text-align: center; color: #484f58; }
+    tr:hover td { background: #0d0d0d; }
+    .cell-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .empty-state { padding: 32px 16px; text-align: center; color: #333; font-size: 11px; }
 
     /* Toast */
     .toast {
       position: fixed; bottom: 24px; right: 24px;
-      padding: 12px 20px; border-radius: 8px;
-      font-size: 14px; font-weight: 500;
+      padding: 10px 16px; border-radius: 3px;
+      font-family: inherit; font-size: 11px; font-weight: 500;
       transform: translateY(80px); opacity: 0;
       transition: all .3s; z-index: 100;
+      letter-spacing: 0.5px;
     }
     .toast.show { transform: translateY(0); opacity: 1; }
-    .toast.success { background: #238636; color: #fff; }
-    .toast.error { background: #da3633; color: #fff; }
+    .toast.success { background: #0d1a0d; border: 1px solid #1a331a; color: #4a8c4a; }
+    .toast.error { background: #1a0d0d; border: 1px solid #331a1a; color: #8c4a4a; }
 
     .edit-input {
-      background: #0d1117; border: 1px solid #58a6ff;
-      border-radius: 4px; color: #e1e4e8;
-      padding: 4px 8px; font-size: 14px; width: 100%; outline: none;
+      background: #0a0a0a; border: 1px solid #333;
+      border-radius: 3px; color: #d0d0d0;
+      padding: 4px 8px; font-family: inherit;
+      font-size: 12px; width: 100%; outline: none;
     }
 
     /* Status colors */
-    .s2 { color: #3fb950; } .s3 { color: #58a6ff; }
-    .s4 { color: #d29922; } .s5 { color: #f85149; }
-
-    /* DB browser */
-    .db-layout { display: flex; min-height: 350px; }
-    .table-sidebar {
-      width: 210px; border-right: 1px solid #21262d;
-      overflow-y: auto; max-height: 500px;
-    }
-    .table-sidebar-item {
-      padding: 10px 16px; cursor: pointer;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid #21262d; font-size: 14px;
-      border-left: 2px solid transparent;
-    }
-    .table-sidebar-item:hover { background: #1f2937; }
-    .table-sidebar-item.active { background: #1f2937; border-left-color: #58a6ff; }
-    .table-detail { flex: 1; overflow: hidden; }
-    .badge {
-      background: #30363d; color: #8b949e; padding: 2px 8px;
-      border-radius: 10px; font-size: 11px;
-    }
-    .null-value { color: #484f58; font-style: italic; }
-    .paginator {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 20px; border-top: 1px solid #21262d;
-      font-size: 13px; color: #8b949e;
-    }
-    .paginator .btn { margin-left: 8px; }
-
-    details summary {
-      padding: 12px 20px; cursor: pointer;
-      font-size: 13px; color: #8b949e;
-      text-transform: uppercase; letter-spacing: .5px;
-      border-bottom: 1px solid #21262d;
-      list-style: none;
-    }
-    details summary::before { content: '\25B6  '; font-size: 10px; }
-    details[open] summary::before { content: '\25BC  '; }
-    details[open] summary { border-bottom: 1px solid #21262d; }
-
-    /* Settings */
-    .settings-form { padding: 20px; max-width: 420px; }
-    .settings-form label {
-      display: block; font-size: 13px; font-weight: 500;
-      color: #e1e4e8; margin-bottom: 6px;
-    }
-    .settings-form input { width: 100%; margin-bottom: 16px; }
+    .s2 { color: #4a8c4a; } .s3 { color: #4a4a8c; }
+    .s4 { color: #8c6a3a; } .s5 { color: #8c4a4a; }
 
     code {
-      background: #21262d; padding: 2px 6px; border-radius: 4px;
-      font-size: 13px; color: #79c0ff;
+      background: #151515; padding: 1px 5px; border-radius: 3px;
+      font-size: 11px; color: #666;
     }
 
+    .null-value { color: #333; font-style: italic; }
+
+    /* DB browser */
+    .db-layout { display: flex; min-height: 300px; }
+    .table-sidebar {
+      width: 190px; border-right: 1px solid #1a1a1a;
+      overflow-y: auto; max-height: 450px;
+    }
+    .table-sidebar-item {
+      padding: 8px 14px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #151515; font-size: 12px;
+      border-left: 2px solid transparent;
+    }
+    .table-sidebar-item:hover { background: #151515; }
+    .table-sidebar-item.active { background: #151515; border-left-color: #4a8c4a; }
+    .table-detail { flex: 1; overflow: hidden; }
+    .badge-count {
+      background: #1a1a1a; color: #555; padding: 1px 6px;
+      border-radius: 3px; font-size: 10px;
+    }
+    .paginator {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-top: 1px solid #1a1a1a;
+      font-size: 11px; color: #444;
+    }
+    .paginator .btn { margin-left: 6px; }
+
+    details summary {
+      padding: 10px 16px; cursor: pointer;
+      font-size: 10px; color: #444;
+      text-transform: uppercase; letter-spacing: 1px;
+      border-bottom: 1px solid #151515;
+      list-style: none;
+    }
+    details summary::before { content: '\25B6  '; font-size: 8px; }
+    details[open] summary::before { content: '\25BC  '; }
+
+    /* Settings */
+    .settings-form { padding: 16px; max-width: 380px; }
+    .settings-form label {
+      display: block; font-size: 11px; font-weight: 500;
+      color: #666; margin-bottom: 4px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .settings-form input { width: 100%; margin-bottom: 12px; }
+
     .data-scroll { overflow-x: auto; }
-    .data-scroll table { min-width: 100%; }
-    .data-scroll td, .data-scroll th { white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    .data-scroll td, .data-scroll th { white-space: nowrap; max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Drop-specific */
+    .tag {
+      font-size: 9px; padding: 2px 6px; border-radius: 2px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      display: inline-block;
+    }
+    .tag-burn { background: #1a0d0d; color: #8c4a4a; }
+    .tag-active { background: #0d1a0d; color: #4a8c4a; }
+    .tag-expired { background: #1a1a1a; color: #444; }
+
+    @media (max-width: 600px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+      .form-row { flex-direction: column; }
+      .db-layout { flex-direction: column; }
+      .table-sidebar { width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid #1a1a1a; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1><span class="status-dot"></span> Control Panel</h1>
-    <div style="display: flex; align-items: center; gap: 16px;">
-      <span id="clock" style="color: #8b949e; font-size: 13px;"></span>
+    <h1><span class="dot"></span> Admin</h1>
+    <div class="header-right">
+      <span id="clock"></span>
+      <button class="btn btn-sm btn-ghost" onclick="location.href='/'">Tools</button>
       <button class="btn btn-sm btn-ghost" onclick="logout()">Logout</button>
     </div>
   </header>
 
   <nav class="tabs">
     <button class="tab active" data-tab="dashboard">Dashboard</button>
+    <button class="tab" data-tab="drops">Drops</button>
     <button class="tab" data-tab="users">Users</button>
     <button class="tab" data-tab="database">Database</button>
     <button class="tab" data-tab="settings">Settings</button>
@@ -225,7 +259,7 @@
 
   <div class="container">
 
-    <!-- ==================== DASHBOARD ==================== -->
+    <!-- DASHBOARD -->
     <div id="tab-dashboard" class="tab-content active">
       <div class="cards">
         <div class="card">
@@ -241,15 +275,15 @@
           <div class="value" id="userCount">--</div>
         </div>
         <div class="card">
-          <div class="label">Node</div>
-          <div class="value" id="nodeVer" style="font-size: 20px;">--</div>
+          <div class="label">Active Drops</div>
+          <div class="value" id="dropCount">--</div>
         </div>
       </div>
       <div class="section">
         <div class="section-header"><h2>Recent Activity</h2></div>
         <table>
           <thead><tr>
-            <th>Time</th><th>Method</th><th>Path</th><th>Status</th><th style="text-align:right">Duration</th>
+            <th>Time</th><th>Method</th><th>Path</th><th>Status</th><th style="text-align:right">ms</th>
           </tr></thead>
           <tbody id="logTableBody">
             <tr><td colspan="5" class="empty-state">No activity yet.</td></tr>
@@ -258,19 +292,67 @@
       </div>
     </div>
 
-    <!-- ==================== USERS ==================== -->
+    <!-- DROPS -->
+    <div id="tab-drops" class="tab-content">
+      <div class="cards">
+        <div class="card">
+          <div class="label">Total Drops</div>
+          <div class="value" id="dropsTotal">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Active</div>
+          <div class="value" id="dropsActive">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Expired</div>
+          <div class="value" id="dropsExpired">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Burn-on-read</div>
+          <div class="value" id="dropsBurn">--</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>All Drops</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-danger" onclick="purgeExpired()">Purge Expired</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Status</th><th>Type</th><th>Expires</th><th>Created</th>
+            <th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody id="dropTableBody">
+            <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section" style="padding:16px;">
+        <p style="font-size:11px;color:#333;line-height:1.6;">
+          Drops are end-to-end encrypted. The server stores only ciphertext.
+          You cannot read drop contents from here &mdash; only the link holder has the key.
+          Admin actions: delete individual drops or purge all expired ones.
+        </p>
+      </div>
+    </div>
+
+    <!-- USERS -->
     <div id="tab-users" class="tab-content">
       <div class="section">
         <div class="section-header"><h2>Users</h2></div>
         <div class="form-row">
-          <input type="email" id="newEmail" placeholder="Email (required)">
-          <input type="text" id="newName" placeholder="Name (optional)">
-          <button class="btn btn-primary" onclick="createUser()">Add User</button>
+          <input type="email" id="newEmail" placeholder="email (required)">
+          <input type="text" id="newName" placeholder="name (optional)">
+          <button class="btn btn-primary" onclick="createUser()">Add</button>
         </div>
         <table>
           <thead><tr>
             <th>ID</th><th>Email</th><th>Name</th><th>Created</th>
-            <th style="text-align: right;">Actions</th>
+            <th style="text-align:right">Actions</th>
           </tr></thead>
           <tbody id="userTableBody">
             <tr><td colspan="5" class="empty-state">Loading...</td></tr>
@@ -279,16 +361,16 @@
       </div>
     </div>
 
-    <!-- ==================== DATABASE ==================== -->
+    <!-- DATABASE -->
     <div id="tab-database" class="tab-content">
       <div class="cards">
         <div class="card">
           <div class="label">Database</div>
-          <div class="value" id="dbName" style="font-size:18px;">--</div>
+          <div class="value" id="dbName" style="font-size:16px;">--</div>
         </div>
         <div class="card">
           <div class="label">Size</div>
-          <div class="value" id="dbSize" style="font-size:18px;">--</div>
+          <div class="value" id="dbSize" style="font-size:16px;">--</div>
         </div>
         <div class="card">
           <div class="label">Tables</div>
@@ -296,7 +378,7 @@
         </div>
         <div class="card">
           <div class="label">PostgreSQL</div>
-          <div class="value" id="dbVersion" style="font-size:18px;">--</div>
+          <div class="value" id="dbVersion" style="font-size:16px;">--</div>
         </div>
       </div>
 
@@ -304,13 +386,13 @@
         <div class="section-header"><h2>Table Browser</h2></div>
         <div class="db-layout">
           <div class="table-sidebar" id="tableSidebar">
-            <div class="empty-state" style="padding:20px;">Loading...</div>
+            <div class="empty-state">Loading...</div>
           </div>
           <div class="table-detail">
             <div id="tableDetailHeader" style="display:none;">
-              <div style="padding:16px 20px; border-bottom:1px solid #21262d; display:flex; justify-content:space-between; align-items:center;">
-                <h3 id="tableDetailName" style="font-size:15px;">--</h3>
-                <span id="tableDetailCount" style="color:#8b949e; font-size:13px;"></span>
+              <div style="padding:12px 16px; border-bottom:1px solid #1a1a1a; display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="tableDetailName" style="font-size:13px; color:#e0e0e0;">--</h3>
+                <span id="tableDetailCount" style="color:#444; font-size:11px;"></span>
               </div>
               <details>
                 <summary>Schema</summary>
@@ -321,15 +403,15 @@
               </details>
               <div id="tableDataSection"></div>
             </div>
-            <div id="tableDetailPlaceholder" class="empty-state" style="padding:60px 20px;">
-              Select a table to browse its data
+            <div id="tableDetailPlaceholder" class="empty-state" style="padding:50px 16px;">
+              Select a table
             </div>
           </div>
         </div>
       </div>
 
       <div class="section">
-        <div class="section-header"><h2>Migration History</h2></div>
+        <div class="section-header"><h2>Migrations</h2></div>
         <table>
           <thead><tr><th>Migration</th><th>Applied</th><th>Steps</th></tr></thead>
           <tbody id="migrationTableBody">
@@ -339,23 +421,23 @@
       </div>
     </div>
 
-    <!-- ==================== SETTINGS ==================== -->
+    <!-- SETTINGS -->
     <div id="tab-settings" class="tab-content">
       <div class="section">
         <div class="section-header"><h2>Change Password</h2></div>
         <form class="settings-form" id="passwordForm" onsubmit="changePassword(event)">
           <label for="currentPassword">Current Password</label>
           <input type="password" id="currentPassword" required autocomplete="current-password">
-          <label for="newPassword">New Password <span style="color:#8b949e; font-weight:400;">(min 8 characters)</span></label>
+          <label for="newPassword">New Password <span style="color:#444; font-weight:400; text-transform:none;">(min 8 chars)</span></label>
           <input type="password" id="newPassword" required minlength="8" autocomplete="new-password">
-          <label for="confirmPassword">Confirm New Password</label>
+          <label for="confirmPassword">Confirm</label>
           <input type="password" id="confirmPassword" required minlength="8" autocomplete="new-password">
-          <button type="submit" class="btn btn-primary">Update Password</button>
+          <button type="submit" class="btn btn-primary">Update</button>
         </form>
       </div>
 
       <div class="section">
-        <div class="section-header"><h2>Environment Variables</h2></div>
+        <div class="section-header"><h2>Environment</h2></div>
         <table>
           <thead><tr><th>Variable</th><th>Value</th></tr></thead>
           <tbody id="envVars">
@@ -365,7 +447,7 @@
       </div>
 
       <div class="section">
-        <div class="section-header"><h2>System Information</h2></div>
+        <div class="section-header"><h2>System</h2></div>
         <table>
           <thead><tr><th>Property</th><th>Value</th></tr></thead>
           <tbody id="sysInfo">
@@ -407,26 +489,35 @@
 
     function fmtDateTime(iso) {
       return new Date(iso).toLocaleString(undefined, {
-        year: 'numeric', month: 'short', day: 'numeric',
+        month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit'
       });
     }
 
     function formatUptime(s) {
       if (s < 60) return s + 's';
-      if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+      if (s < 3600) return Math.floor(s / 60) + 'm';
       const h = Math.floor(s / 3600);
       const m = Math.floor((s % 3600) / 60);
       return h + 'h ' + m + 'm';
     }
 
+    function timeUntil(iso) {
+      const diff = new Date(iso) - Date.now();
+      if (diff <= 0) return 'expired';
+      const h = Math.floor(diff / 3600000);
+      if (h >= 24) return Math.floor(h / 24) + 'd';
+      if (h >= 1) return h + 'h';
+      return Math.floor(diff / 60000) + 'm';
+    }
+
     function renderCell(v) {
-      if (v === null || v === undefined) return '<span class="null-value">NULL</span>';
+      if (v === null || v === undefined) return '<span class="null-value">null</span>';
       if (typeof v === 'boolean') return v ? 'true' : 'false';
-      if (typeof v === 'object') return '<code>' + esc(JSON.stringify(v)).substring(0, 100) + '</code>';
+      if (typeof v === 'object') return '<code>' + esc(JSON.stringify(v)).substring(0, 80) + '</code>';
       const s = String(v);
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return fmtDateTime(s);
-      if (s.length > 80) return esc(s.substring(0, 80)) + '\u2026';
+      if (s.length > 60) return esc(s.substring(0, 60)) + '\u2026';
       return esc(s);
     }
 
@@ -449,7 +540,7 @@
 
     async function logout() {
       await fetch('/auth/logout', { method: 'POST' });
-      window.location.href = '/login.html';
+      window.location.href = '/';
     }
 
     // ===================== TABS =====================
@@ -467,6 +558,7 @@
     function refreshTab(name) {
       const r = {
         dashboard: () => { fetchStatus(); fetchLogs(); },
+        drops: () => { fetchDropStats(); fetchDrops(); },
         users: () => { fetchUsers(); },
         database: () => { fetchDbInfo(); fetchTables(); fetchMigrations(); },
         settings: () => { fetchSystem(); },
@@ -483,8 +575,12 @@
         document.getElementById('uptime').textContent = formatUptime(d.uptime);
         document.getElementById('memory').innerHTML = d.memoryUsage + ' <span class="unit">MB</span>';
         document.getElementById('userCount').textContent = d.userCount;
-        document.getElementById('nodeVer').textContent = d.nodeVersion;
-      } catch { document.getElementById('uptime').textContent = '--'; }
+      } catch {}
+      try {
+        const res = await fetch('/api/drops/stats');
+        const d = await res.json();
+        document.getElementById('dropCount').textContent = d.active;
+      } catch {}
     }
 
     async function fetchLogs() {
@@ -500,14 +596,78 @@
           const sc = l.status < 300 ? 's2' : l.status < 400 ? 's3' : l.status < 500 ? 's4' : 's5';
           const time = new Date(l.time).toLocaleTimeString();
           return `<tr>
-            <td style="color:#8b949e">${time}</td>
+            <td style="color:#444">${time}</td>
             <td><code>${l.method}</code></td>
             <td>${esc(l.path)}</td>
             <td><span class="${sc}">${l.status}</span></td>
-            <td style="text-align:right;color:#8b949e">${l.ms}ms</td>
+            <td style="text-align:right;color:#444">${l.ms}ms</td>
           </tr>`;
         }).join('');
       } catch {}
+    }
+
+    // ===================== DROPS =====================
+
+    async function fetchDropStats() {
+      try {
+        const res = await fetch('/api/drops/stats');
+        const d = await res.json();
+        document.getElementById('dropsTotal').textContent = d.total;
+        document.getElementById('dropsActive').textContent = d.active;
+        document.getElementById('dropsExpired').textContent = d.expired;
+        document.getElementById('dropsBurn').textContent = d.burn;
+      } catch {}
+    }
+
+    async function fetchDrops() {
+      try {
+        const res = await fetch('/api/drops');
+        const drops = await res.json();
+        const tbody = document.getElementById('dropTableBody');
+        if (drops.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No drops yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = drops.map(d => {
+          const status = d.expired
+            ? '<span class="tag tag-expired">expired</span>'
+            : '<span class="tag tag-active">active</span>';
+          const type = d.burnAfterRead
+            ? '<span class="tag tag-burn">burn</span>'
+            : '<span style="color:#444">standard</span>';
+          return `<tr>
+            <td><code>${esc(d.id)}</code></td>
+            <td>${status}</td>
+            <td>${type}</td>
+            <td style="color:#444">${d.expired ? 'expired' : timeUntil(d.expiresAt)}</td>
+            <td style="color:#444">${fmtDateTime(d.createdAt)}</td>
+            <td><div class="cell-actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteDrop('${esc(d.id)}')">Delete</button>
+            </div></td>
+          </tr>`;
+        }).join('');
+      } catch {}
+    }
+
+    async function deleteDrop(id) {
+      if (!confirm('Delete this drop?')) return;
+      const res = await fetch('/api/drops/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Drop deleted');
+        fetchDrops();
+        fetchDropStats();
+      } else { showToast('Failed to delete', 'error'); }
+    }
+
+    async function purgeExpired() {
+      if (!confirm('Purge all expired drops?')) return;
+      const res = await fetch('/api/drops/purge-expired', { method: 'POST' });
+      if (res.ok) {
+        const d = await res.json();
+        showToast(`Purged ${d.purged} expired drop${d.purged !== 1 ? 's' : ''}`);
+        fetchDrops();
+        fetchDropStats();
+      } else { showToast('Failed to purge', 'error'); }
     }
 
     // ===================== USERS =====================
@@ -518,7 +678,7 @@
         const users = await res.json();
         const tbody = document.getElementById('userTableBody');
         if (users.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users yet. Add one above.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users yet.</td></tr>';
           return;
         }
         tbody.innerHTML = users.map(u => {
@@ -528,9 +688,9 @@
               <td><input class="edit-input" id="editEmail" value="${esc(u.email)}"></td>
               <td><input class="edit-input" id="editName" value="${esc(u.name || '')}"></td>
               <td>${fmtDate(u.createdAt)}</td>
-              <td><div class="actions">
+              <td><div class="cell-actions">
                 <button class="btn btn-sm btn-primary" onclick="saveEdit(${u.id})">Save</button>
-                <button class="btn btn-sm btn-cancel" onclick="cancelEdit()">Cancel</button>
+                <button class="btn btn-sm btn-ghost" onclick="cancelEdit()">Cancel</button>
               </div></td>
             </tr>`;
           }
@@ -538,16 +698,16 @@
             <td>${u.id}</td>
             <td>${esc(u.email)}</td>
             <td>${esc(u.name || '--')}</td>
-            <td>${fmtDate(u.createdAt)}</td>
-            <td><div class="actions">
-              <button class="btn btn-sm btn-edit" onclick="startEdit(${u.id})">Edit</button>
+            <td style="color:#444">${fmtDate(u.createdAt)}</td>
+            <td><div class="cell-actions">
+              <button class="btn btn-sm btn-ghost" onclick="startEdit(${u.id})">Edit</button>
               <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button>
             </div></td>
           </tr>`;
         }).join('');
       } catch {
         document.getElementById('userTableBody').innerHTML =
-          '<tr><td colspan="5" class="empty-state">Failed to load users.</td></tr>';
+          '<tr><td colspan="5" class="empty-state">Failed to load.</td></tr>';
       }
     }
 
@@ -568,7 +728,7 @@
         fetchStatus();
       } else {
         const err = await res.json();
-        showToast(err.error || 'Failed to create user', 'error');
+        showToast(err.error || 'Failed', 'error');
       }
     }
 
@@ -590,7 +750,7 @@
         fetchUsers();
       } else {
         const err = await res.json();
-        showToast(err.error || 'Failed to update', 'error');
+        showToast(err.error || 'Failed', 'error');
       }
     }
 
@@ -630,12 +790,10 @@
           const active = t.name === selectedTable ? ' active' : '';
           return `<div class="table-sidebar-item${active}" onclick="selectTable('${t.name}')">
             <span>${esc(t.name)}</span>
-            <span class="badge">${t.row_count ?? 0}</span>
+            <span class="badge-count">${t.row_count ?? 0}</span>
           </div>`;
         }).join('');
-        if (!selectedTable && tables.length > 0) {
-          selectTable(tables[0].name);
-        }
+        if (!selectedTable && tables.length > 0) selectTable(tables[0].name);
       } catch {}
     }
 
@@ -659,20 +817,18 @@
         document.getElementById('tableDetailName').textContent = d.name;
         document.getElementById('tableDetailCount').textContent = d.total + ' rows';
 
-        // Schema
         document.getElementById('schemaTableBody').innerHTML = d.columns.map(c =>
           `<tr>
             <td><code>${esc(c.column_name)}</code></td>
             <td>${esc(c.data_type)}</td>
-            <td>${c.is_nullable === 'YES' ? 'Yes' : 'No'}</td>
+            <td>${c.is_nullable === 'YES' ? 'yes' : 'no'}</td>
             <td>${c.column_default ? '<code>' + esc(String(c.column_default)) + '</code>' : '<span class="null-value">--</span>'}</td>
           </tr>`
         ).join('');
 
-        // Data
         const section = document.getElementById('tableDataSection');
         if (d.rows.length === 0) {
-          section.innerHTML = '<div class="empty-state">No data in this table.</div>';
+          section.innerHTML = '<div class="empty-state">Empty table.</div>';
           return;
         }
         const cols = d.columns.map(c => c.column_name);
@@ -686,14 +842,13 @@
         });
         h += '</tbody></table></div>';
 
-        // Pagination
         const start = (d.page - 1) * d.limit + 1;
         const end = Math.min(d.page * d.limit, d.total);
         h += `<div class="paginator">
-          <span>Showing ${start}\u2013${end} of ${d.total}</span>
+          <span>${start}\u2013${end} of ${d.total}</span>
           <div>
-            <button class="btn btn-sm btn-edit" ${d.page <= 1 ? 'disabled' : ''} onclick="prevPage()">Previous</button>
-            <button class="btn btn-sm btn-edit" ${d.page >= d.pages ? 'disabled' : ''} onclick="nextPage()">Next</button>
+            <button class="btn btn-sm btn-ghost" ${d.page <= 1 ? 'disabled' : ''} onclick="prevPage()">Prev</button>
+            <button class="btn btn-sm btn-ghost" ${d.page >= d.pages ? 'disabled' : ''} onclick="nextPage()">Next</button>
           </div>
         </div>`;
         section.innerHTML = h;
@@ -709,14 +864,14 @@
         const migs = await res.json();
         const tbody = document.getElementById('migrationTableBody');
         if (migs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No migrations found.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No migrations.</td></tr>';
           return;
         }
         tbody.innerHTML = migs.map(m =>
           `<tr>
             <td><code>${esc(m.migration_name)}</code></td>
-            <td>${fmtDateTime(m.started_at)}</td>
-            <td>${m.applied_steps_count} step${m.applied_steps_count !== 1 ? 's' : ''}</td>
+            <td style="color:#444">${fmtDateTime(m.started_at)}</td>
+            <td>${m.applied_steps_count}</td>
           </tr>`
         ).join('');
       } catch {}
@@ -733,21 +888,21 @@
           ['PID', d.pid],
           ['Node', d.nodeVersion],
           ['Platform', d.platform],
-          ['Architecture', d.arch],
+          ['Arch', d.arch],
           ['Hostname', d.hostname],
           ['CPUs', d.cpus],
-          ['Total Memory', d.totalMemory + ' MB'],
-          ['Free Memory', d.freeMemory + ' MB'],
-          ['Process Memory', d.processMemory + ' MB'],
-          ['Process Uptime', formatUptime(d.uptime)],
-          ['Working Directory', '<code>' + esc(d.cwd) + '</code>'],
-        ].map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+          ['Total Mem', d.totalMemory + ' MB'],
+          ['Free Mem', d.freeMemory + ' MB'],
+          ['Process Mem', d.processMemory + ' MB'],
+          ['Uptime', formatUptime(d.uptime)],
+          ['CWD', '<code>' + esc(d.cwd) + '</code>'],
+        ].map(([k, v]) => `<tr><td style="color:#666">${k}</td><td>${v}</td></tr>`).join('');
 
         document.getElementById('envVars').innerHTML = Object.entries(d.env)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([k, v]) =>
             `<tr><td><code>${esc(k)}</code></td><td>${/^\u2022+$/.test(v)
-              ? '<span style="color:#484f58">' + v + '</span>'
+              ? '<span style="color:#333">' + v + '</span>'
               : esc(v)}</td></tr>`
           ).join('');
       } catch {}
@@ -766,11 +921,11 @@
         body: JSON.stringify({ currentPassword: cur, newPassword: np }),
       });
       if (res.ok) {
-        showToast('Password changed successfully');
+        showToast('Password updated');
         document.getElementById('passwordForm').reset();
       } else {
         const data = await res.json();
-        showToast(data.error || 'Failed to change password', 'error');
+        showToast(data.error || 'Failed', 'error');
       }
     }
 

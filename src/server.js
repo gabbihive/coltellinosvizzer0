@@ -408,6 +408,44 @@ app.get('/api/logs', (req, res) => {
   res.json(requestLog);
 });
 
+// --- API: Drops (admin) ---
+
+app.get('/api/drops', async (req, res) => {
+  const drops = await prisma.paste.findMany({
+    select: { id: true, burnAfterRead: true, expiresAt: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+  const now = new Date();
+  res.json(drops.map(d => ({
+    ...d,
+    expired: d.expiresAt < now,
+    size: undefined,
+  })));
+});
+
+app.get('/api/drops/stats', async (req, res) => {
+  const total = await prisma.paste.count();
+  const active = await prisma.paste.count({ where: { expiresAt: { gt: new Date() } } });
+  const burnCount = await prisma.paste.count({ where: { burnAfterRead: true, expiresAt: { gt: new Date() } } });
+  res.json({ total, active, expired: total - active, burn: burnCount });
+});
+
+app.delete('/api/drops/:id', async (req, res) => {
+  try {
+    await prisma.paste.delete({ where: { id: req.params.id } });
+    res.status(204).end();
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Drop not found' });
+    throw err;
+  }
+});
+
+app.post('/api/drops/purge-expired', async (req, res) => {
+  const { count } = await prisma.paste.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  res.json({ purged: count });
+});
+
 // --- Start ---
 
 app.listen(PORT, () => {
