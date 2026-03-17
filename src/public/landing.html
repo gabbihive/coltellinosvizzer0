@@ -3,364 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Server Express</title>
+  <title>Tools</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f1117;
-      color: #c9d1d9;
-      line-height: 1.6;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
+      min-height: 100vh;
     }
 
-    .hero {
-      text-align: center;
-      padding: 80px 24px 60px;
-      max-width: 720px;
+    .container {
+      max-width: 600px;
       margin: 0 auto;
+      padding: 80px 20px;
     }
 
-    .hero h1 {
-      font-size: 40px;
-      font-weight: 700;
-      color: #f0f6fc;
-      margin-bottom: 12px;
-      letter-spacing: -0.5px;
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
     }
 
-    .hero h1 span { color: #58a6ff; }
-
-    .hero .tagline {
-      font-size: 18px;
-      color: #8b949e;
-      margin-bottom: 40px;
-    }
-
-    .badge-row {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      flex-wrap: wrap;
+    .subtitle {
+      font-size: 12px;
+      color: #383838;
       margin-bottom: 48px;
     }
 
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 20px;
-      font-size: 13px;
-      color: #8b949e;
-    }
-
-    .badge .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #3fb950;
-    }
-
-    .sections {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 24px 80px;
+    .tools {
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 1px;
     }
 
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 32px;
-    }
-
-    .card h2 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #f0f6fc;
-      margin-bottom: 16px;
+    .tool {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 20px;
+      padding: 20px;
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s, background 0.15s;
     }
 
-    .card h2 .icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
+    .tool:hover {
+      border-color: #333;
+      background: #151515;
+    }
+
+    .tool-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
+      font-size: 18px;
       flex-shrink: 0;
     }
 
-    .card p {
-      color: #8b949e;
-      font-size: 15px;
-      margin-bottom: 12px;
-    }
+    .tool-body { flex: 1; min-width: 0; }
 
-    .card p:last-child { margin-bottom: 0; }
-
-    .card ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    .card li {
-      padding: 8px 0;
-      border-bottom: 1px solid #21262d;
+    .tool-name {
       font-size: 14px;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+      font-weight: 600;
+      color: #e0e0e0;
+      margin-bottom: 4px;
     }
 
-    .card li:last-child { border-bottom: none; }
+    .tool-desc {
+      font-size: 11px;
+      color: #555;
+      line-height: 1.5;
+    }
 
-    .card li .label {
-      color: #f0f6fc;
-      font-weight: 500;
-      min-width: 120px;
+    .tool-tags {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .tool-arrow {
+      color: #333;
+      font-size: 14px;
       flex-shrink: 0;
     }
 
-    .card li .desc { color: #8b949e; }
+    .tool:hover .tool-arrow { color: #666; }
 
-    .icon-blue { background: #0d2240; color: #58a6ff; }
-    .icon-green { background: #0d2d1a; color: #3fb950; }
-    .icon-purple { background: #1e1533; color: #bc8cff; }
-    .icon-orange { background: #2d1a00; color: #f0883e; }
-    .icon-red { background: #2d1214; color: #f85149; }
+    .tag-green { background: #0d1a0d; color: #4a8c4a; }
+    .tag-red { background: #1a0d0d; color: #8c4a4a; }
+    .tag-blue { background: #0d0d1a; color: #4a4a8c; }
+    .tag-orange { background: #1a140d; color: #8c6a3a; }
 
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-    }
+    .icon-green { background: #0d1a0d; color: #4a8c4a; }
 
-    .diagram {
-      background: #0d1117;
-      border: 1px solid #21262d;
-      border-radius: 8px;
-      padding: 24px;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 13px;
-      color: #8b949e;
-      overflow-x: auto;
-      line-height: 1.8;
+    .coming-soon {
+      padding: 20px;
+      border: 1px dashed #1a1a1a;
+      border-radius: 4px;
       text-align: center;
+      font-size: 11px;
+      color: #282828;
+      letter-spacing: 1px;
     }
-
-    .diagram .highlight { color: #58a6ff; }
-    .diagram .green { color: #3fb950; }
-    .diagram .purple { color: #bc8cff; }
-    .diagram .orange { color: #f0883e; }
-    .diagram .arrow { color: #484f58; }
 
     footer {
       text-align: center;
-      padding: 32px 24px;
-      border-top: 1px solid #21262d;
-      color: #484f58;
-      font-size: 13px;
-    }
-
-    footer a {
-      color: #58a6ff;
-      text-decoration: none;
-    }
-
-    @media (max-width: 600px) {
-      .hero h1 { font-size: 28px; }
-      .hero .tagline { font-size: 16px; }
-      .grid-2 { grid-template-columns: 1fr; }
-      .card li { flex-direction: column; gap: 2px; }
-      .card li .label { min-width: 0; }
+      padding: 40px 20px 20px;
+      font-size: 10px;
+      color: #1a1a1a;
     }
   </style>
 </head>
 <body>
 
-  <div class="hero">
-    <h1>Server <span>Express</span></h1>
-    <p class="tagline">A web server with a built-in admin control panel, user management, and database browser &mdash; all in one place.</p>
-    <div class="badge-row">
-      <span class="badge"><span class="dot"></span> Node.js + Express</span>
-      <span class="badge"><span class="dot"></span> PostgreSQL</span>
-      <span class="badge"><span class="dot"></span> Prisma ORM</span>
-      <span class="badge"><span class="dot"></span> Hosted on Render</span>
+  <div class="container">
+    <h1>Tools</h1>
+    <p class="subtitle">self-hosted utilities</p>
+
+    <div class="tools">
+      <a href="/drop" class="tool">
+        <div class="tool-icon icon-green">//</div>
+        <div class="tool-body">
+          <div class="tool-name">Dead Drop</div>
+          <div class="tool-desc">Zero-knowledge encrypted paste bin. Client-side AES-256-GCM encryption, burn-after-reading, auto-expiry. The server never sees your content.</div>
+          <div class="tool-tags">
+            <span class="tag tag-green">encrypted</span>
+            <span class="tag tag-red">anonymous</span>
+            <span class="tag tag-blue">zero-knowledge</span>
+          </div>
+        </div>
+        <span class="tool-arrow">&rarr;</span>
+      </a>
+
+      <div class="coming-soon">more tools coming</div>
     </div>
   </div>
 
-  <div class="sections">
-
-    <!-- What Is This? -->
-    <div class="card">
-      <h2><span class="icon icon-blue">?</span> What is this?</h2>
-      <p>This is a <strong style="color:#f0f6fc">web application server</strong> &mdash; a program that runs 24/7 on the internet, waiting for visitors and responding to their requests.</p>
-      <p>Think of it like a restaurant: the server is the kitchen. When you visit a webpage (place an order), the server prepares the data you need (cooks your food) and sends it back to your browser (serves your plate).</p>
-      <p>This particular server comes with a <strong style="color:#f0f6fc">control panel</strong> where the admin can manage users, browse the database, view logs, and change settings &mdash; all from a web browser.</p>
-    </div>
-
-    <!-- How It Works -->
-    <div class="card">
-      <h2><span class="icon icon-green">&#9881;</span> How does it work?</h2>
-      <p>Here's the journey of a request, step by step:</p>
-      <div class="diagram">
-        <span class="highlight">Your Browser</span>
-        <span class="arrow"> &rarr; </span>
-        <span class="orange">Render (cloud host)</span>
-        <span class="arrow"> &rarr; </span>
-        <span class="green">Express (web server)</span>
-        <span class="arrow"> &rarr; </span>
-        <span class="purple">Prisma (ORM)</span>
-        <span class="arrow"> &rarr; </span>
-        <span class="highlight">PostgreSQL (database)</span>
-      </div>
-      <ul style="margin-top:16px">
-        <li>
-          <span class="label">1. You visit a URL</span>
-          <span class="desc">Your browser sends a request over the internet to this server's address.</span>
-        </li>
-        <li>
-          <span class="label">2. Express receives it</span>
-          <span class="desc">Express is the framework that listens for requests and decides what to do with them &mdash; like a receptionist routing your call.</span>
-        </li>
-        <li>
-          <span class="label">3. Prisma talks to the DB</span>
-          <span class="desc">If data is needed (like a list of users), Prisma translates the request into a database query. It's a translator between JavaScript and SQL.</span>
-        </li>
-        <li>
-          <span class="label">4. PostgreSQL stores data</span>
-          <span class="desc">The actual database &mdash; a structured filing cabinet that holds all users, settings, and application data permanently.</span>
-        </li>
-        <li>
-          <span class="label">5. Response comes back</span>
-          <span class="desc">The data flows back through the chain and arrives in your browser, usually in under a second.</span>
-        </li>
-      </ul>
-    </div>
-
-    <!-- The Tech Stack -->
-    <div class="card">
-      <h2><span class="icon icon-purple">&#9733;</span> The tech stack explained</h2>
-      <div class="grid-2">
-        <div>
-          <ul>
-            <li>
-              <span class="label">Node.js</span>
-              <span class="desc">The engine that lets JavaScript run outside a browser &mdash; it powers the server.</span>
-            </li>
-            <li>
-              <span class="label">Express</span>
-              <span class="desc">A lightweight framework that makes it easy to define routes (URLs) and handle requests.</span>
-            </li>
-            <li>
-              <span class="label">Prisma</span>
-              <span class="desc">An ORM (Object-Relational Mapper) &mdash; lets you work with the database using JavaScript instead of writing raw SQL.</span>
-            </li>
-          </ul>
-        </div>
-        <div>
-          <ul>
-            <li>
-              <span class="label">PostgreSQL</span>
-              <span class="desc">A powerful, open-source database. Think of it as a very organized spreadsheet that can handle millions of rows.</span>
-            </li>
-            <li>
-              <span class="label">express-session</span>
-              <span class="desc">Keeps you logged in. When you sign in, the server gives your browser a cookie to remember you.</span>
-            </li>
-            <li>
-              <span class="label">Render</span>
-              <span class="desc">The cloud platform where this server lives. It keeps the server running and gives it a public URL.</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- Features -->
-    <div class="card">
-      <h2><span class="icon icon-orange">&#9878;</span> What can the admin do?</h2>
-      <p>Behind the login screen, there's a control panel with four tabs:</p>
-      <ul>
-        <li>
-          <span class="label">Dashboard</span>
-          <span class="desc">See server status (uptime, memory usage, Node version) and a live request log showing every API call.</span>
-        </li>
-        <li>
-          <span class="label">Users</span>
-          <span class="desc">Create, edit, and delete users. Each user has an email, optional name, and timestamps.</span>
-        </li>
-        <li>
-          <span class="label">Database</span>
-          <span class="desc">Browse any table in the database, view column types, check migration history &mdash; no SQL knowledge needed.</span>
-        </li>
-        <li>
-          <span class="label">Settings</span>
-          <span class="desc">Change the admin password, view environment variables, and check system information.</span>
-        </li>
-      </ul>
-    </div>
-
-    <!-- Dead Drop -->
-    <div class="card">
-      <h2><span class="icon icon-green">&#9889;</span> Dead Drop &mdash; anonymous paste bin</h2>
-      <p>A zero-knowledge encrypted paste bin for sharing sensitive text. Your content is encrypted in the browser before it ever reaches the server &mdash; the server literally cannot read it.</p>
-      <ul>
-        <li>
-          <span class="label">Client-side encryption</span>
-          <span class="desc">AES-256-GCM encryption happens entirely in your browser. The key lives in the URL fragment, which is never sent to the server.</span>
-        </li>
-        <li>
-          <span class="label">Burn after reading</span>
-          <span class="desc">Optionally destroy the message after it's read once. Gone forever.</span>
-        </li>
-        <li>
-          <span class="label">No traces</span>
-          <span class="desc">No logs, no IP tracking, no cookies, no metadata. Drops auto-expire.</span>
-        </li>
-      </ul>
-      <div style="margin-top:16px"><a href="/drop" style="color:#3fb950;font-size:13px">Open Dead Drop &rarr;</a></div>
-    </div>
-
-    <!-- Security -->
-    <div class="card">
-      <h2><span class="icon icon-red">&#9888;</span> How is it secured?</h2>
-      <ul>
-        <li>
-          <span class="label">Password hashing</span>
-          <span class="desc">Passwords are hashed with scrypt (a one-way function). Even if someone got the database, they can't reverse the password.</span>
-        </li>
-        <li>
-          <span class="label">Timing-safe comparison</span>
-          <span class="desc">Password checks use constant-time comparison to prevent timing attacks (where attackers measure response time to guess characters).</span>
-        </li>
-        <li>
-          <span class="label">Secure cookies</span>
-          <span class="desc">Session cookies are HTTP-only (JavaScript can't read them), SameSite (prevents cross-site attacks), and Secure (HTTPS only in production).</span>
-        </li>
-        <li>
-          <span class="label">SQL injection protection</span>
-          <span class="desc">Database table names are validated against the actual database before use. Prisma parameterizes all queries automatically.</span>
-        </li>
-      </ul>
-    </div>
-
-  </div>
-
-  <footer>
-    Built with Node.js, Express, Prisma &amp; PostgreSQL &mdash; deployed on <a href="https://render.com" target="_blank" rel="noopener">Render</a>
-  </footer>
+  <footer>server-express</footer>
 
 </body>
 </html>
