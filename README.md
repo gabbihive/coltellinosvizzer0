@@ -2,14 +2,10 @@
 
 Self-hosted secure communicatons platform. Built with Node.js and Express. Fully in-memory — no database.
 
-         ______       _     _     _ 
- / _____)     | |   | |   (_)
-| /  ___  ____| | _ | | _  _ 
-| | (___)/ _  | || \| || \| |
-| \____/( ( | | |_) ) |_) ) |
- \_____/ \_||_|____/|____/|_|
-                              
-                                                         
+
+
+<img width="473" height="184" alt="ascii-art-text" src="https://github.com/user-attachments/assets/af7d8e09-6f95-4a14-b196-619b80be4b8a" />
+                                          
                                                          
 
 ## Tools
