@@ -1,6 +1,6 @@
-# server-express
+# coltellinosvizzer0
 
-Self-hosted tools platform with an admin control panel. Built with Node.js and Express. Fully in-memory — no database. Deployed on Render.
+Self-hosted secure communicatons platform. Built with Node.js and Express. Fully in-memory — no database.
 
 ## Tools
 
