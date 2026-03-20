@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal Room</title>
+  <meta name="referrer" content="no-referrer">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 700px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      font-size: 12px;
+      color: #505050;
+    }
+
+    .notice {
+      background: #0d1a0d;
+      border: 1px solid #1a331a;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 11px;
+      color: #4a8c4a;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .notice strong { color: #6abf6a; }
+
+    .btn {
+      padding: 10px 24px;
+      background: #1a1a1a;
+      color: #a0a0a0;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { background: #222; color: #e0e0e0; border-color: #444; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-primary {
+      background: #0d1a0d;
+      border-color: #1a331a;
+      color: #4a8c4a;
+    }
+
+    .btn-primary:hover { background: #143014; color: #6abf6a; }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .result-url {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #6abf6a;
+      word-break: break-all;
+      cursor: pointer;
+      position: relative;
+      line-height: 1.5;
+      margin-top: 16px;
+    }
+
+    .result-url:hover { border-color: #333; }
+
+    .result-url .copy-hint {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Chat room */
+    .room-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .room-id {
+      font-size: 11px;
+      color: #333;
+      letter-spacing: 1px;
+    }
+
+    .peer-count {
+      font-size: 11px;
+      color: #505050;
+    }
+
+    .peer-count .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #4a8c4a;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    .messages {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      flex: 1;
+      min-height: 300px;
+      max-height: 500px;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .msg {
+      max-width: 80%;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .msg-self {
+      align-self: flex-end;
+      background: #0d1a0d;
+      border: 1px solid #1a331a;
+      color: #b0b0b0;
+    }
+
+    .msg-other {
+      align-self: flex-start;
+      background: #151515;
+      border: 1px solid #1a1a1a;
+      color: #b0b0b0;
+    }
+
+    .msg-peer {
+      font-size: 10px;
+      color: #505050;
+      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+    }
+
+    .msg-system {
+      align-self: center;
+      font-size: 10px;
+      color: #333;
+      font-style: italic;
+      padding: 4px 0;
+    }
+
+    .msg-error {
+      align-self: center;
+      font-size: 10px;
+      color: #8c4a4a;
+      padding: 4px 0;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 10px 14px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      color: #d0d0d0;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .chat-input input:focus { border-color: #333; }
+    .chat-input input::placeholder { color: #333; }
+
+    /* Error view */
+    .error-view {
+      display: none;
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .error-view h2 {
+      font-size: 16px;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .error-view p {
+      font-size: 12px;
+      color: #444;
+    }
+
+    .error-view .btn { margin-top: 24px; }
+
+    .security-info {
+      margin-top: 32px;
+      border-top: 1px solid #181818;
+      padding-top: 20px;
+    }
+
+    .security-info summary {
+      font-size: 11px;
+      color: #444;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      outline: none;
+    }
+
+    .security-info summary:hover { color: #666; }
+
+    .security-info .detail {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #383838;
+      line-height: 1.8;
+    }
+
+    .security-info .detail code {
+      color: #505050;
+      background: #111;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 10px;
+      color: #282828;
+      letter-spacing: 1px;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 500px) {
+      .messages { max-height: 400px; min-height: 200px; }
+      .msg { max-width: 90%; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Signal Room</h1>
+      <p>zero-knowledge encrypted ephemeral chat</p>
+    </header>
+
+    <!-- CREATE VIEW -->
+    <div id="createView">
+      <div class="notice">
+        <strong>Zero knowledge.</strong> Messages are encrypted in your browser with AES-256-GCM before leaving your device.
+        The decryption key lives in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
+        The server relays only ciphertext. Messages are ephemeral &mdash; they exist only while participants are connected.
+        Nothing is stored. Nothing is logged.
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="createBtn">Create Room</button>
+        <a href="/" class="btn" style="text-decoration:none">Back</a>
+      </div>
+
+      <div id="roomLink" class="hidden">
+        <div class="result-url" id="resultUrl" title="Click to copy">
+          <span class="copy-hint">click to copy</span>
+          <span id="resultUrlText"></span>
+        </div>
+        <p style="margin-top:10px; font-size:11px; color:#505050;">
+          Share this link. Anyone with it can join and read messages. The room vanishes when everyone leaves.
+        </p>
+      </div>
+
+      <div class="security-info">
+        <details>
+          <summary>How it works</summary>
+          <div class="detail">
+            1. A random room ID and 256-bit <code>AES-GCM</code> key are generated in your browser<br>
+            2. The room ID is in the URL path &mdash; the server sees this (it's the room address)<br>
+            3. The encryption key is in the URL fragment (<code>#</code>) &mdash; browsers never transmit this<br>
+            4. Messages are encrypted client-side before being sent over WebSocket<br>
+            5. The server relays opaque ciphertext between participants &mdash; it cannot decrypt anything<br>
+            6. No messages are stored on the server &mdash; not in memory, not in a database<br>
+            7. No IP addresses, cookies, user agents, or metadata are logged for chat routes<br>
+            8. Rooms are destroyed the moment the last participant disconnects<br>
+            9. Even if the server is compromised, past messages cannot be recovered &mdash; they never existed on disk
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- CHAT VIEW -->
+    <div id="chatView" class="hidden" style="flex:1;display:flex;flex-direction:column;">
+      <div class="room-header">
+        <div>
+          <span class="room-id">room: <code id="roomIdDisplay"></code></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="peer-count"><span class="dot"></span><span id="peerCount">0</span> connected</span>
+          <button class="btn" style="padding:6px 12px;font-size:10px;" id="copyLinkBtn">Copy link</button>
+        </div>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="chat-input">
+        <input type="text" id="msgInput" placeholder="Type a message..." autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary" id="sendBtn" style="padding:10px 20px;">Send</button>
+      </div>
+
+      <div class="security-info">
+        <details>
+          <summary>How it works</summary>
+          <div class="detail">
+            All messages are encrypted with <code>AES-256-GCM</code> in your browser before transmission.
+            The server relays ciphertext only. The key never leaves your URL bar.
+            Messages are ephemeral &mdash; they are not stored anywhere. When you close this tab, they're gone.
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- ERROR VIEW -->
+    <div class="error-view" id="errorView">
+      <h2 id="errorTitle">Connection failed</h2>
+      <p id="errorDesc">Could not connect to the chat room.</p>
+      <a href="/chat" class="btn" style="text-decoration:none">Create a new room</a>
+    </div>
+  </div>
+
+  <footer>no logs &middot; no storage &middot; no metadata &middot; zero knowledge</footer>
+
+  <script>
+    const createView = document.getElementById('createView');
+    const chatView = document.getElementById('chatView');
+    const errorView = document.getElementById('errorView');
+    const messagesEl = document.getElementById('messages');
+
+    let ws = null;
+    let cryptoKey = null;
+    let myPeerId = null;
+
+    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+
+    async function generateKey() {
+      const key = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      const raw = await crypto.subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+    }
+
+    async function importKey(encoded) {
+      const raw = base64ToBuf(encoded);
+      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    }
+
+    async function encryptMsg(text, key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encoded = new TextEncoder().encode(text);
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encoded
+      );
+      return {
+        data: bufToBase64(new Uint8Array(ciphertext)),
+        iv: bufToBase64(iv),
+      };
+    }
+
+    async function decryptMsg(dataB64, ivB64, key) {
+      const ciphertext = base64ToBuf(dataB64);
+      const iv = base64ToBuf(ivB64);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+      );
+      return new TextDecoder().decode(decrypted);
+    }
+
+    function bufToBase64(buf) {
+      let binary = '';
+      for (const b of buf) binary += String.fromCharCode(b);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64ToBuf(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      const binary = atob(b64);
+      const buf = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+      return buf;
+    }
+
+    function esc(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // --- UI helpers ---
+
+    function addMessage(html, cls) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + cls;
+      div.innerHTML = html;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function addSystemMsg(text) {
+      addMessage(esc(text), 'msg-system');
+    }
+
+    function showError(title, desc) {
+      createView.classList.add('hidden');
+      chatView.classList.add('hidden');
+      chatView.style.display = 'none';
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorDesc').textContent = desc;
+      errorView.style.display = 'block';
+    }
+
+    // --- Create room ---
+
+    document.getElementById('createBtn').addEventListener('click', async () => {
+      const roomId = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+      const { encoded: keyStr } = await generateKey();
+      const url = `${location.origin}/chat/${roomId}#${keyStr}`;
+
+      document.getElementById('resultUrlText').textContent = url;
+      document.getElementById('roomLink').classList.remove('hidden');
+
+      document.getElementById('resultUrl').addEventListener('click', () => {
+        navigator.clipboard.writeText(url).then(() => {
+          const hint = document.querySelector('.copy-hint');
+          hint.textContent = 'copied';
+          setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+        });
+      });
+
+      // Navigate to the room
+      setTimeout(() => { location.href = url; }, 300);
+    });
+
+    // --- Join room ---
+
+    async function joinRoom() {
+      const match = location.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
+      if (!match) return;
+
+      const roomId = match[1];
+      const keyStr = location.hash.slice(1);
+
+      if (!keyStr) {
+        showError('Missing key', 'The encryption key was not found in the URL. The link may be incomplete.');
+        return;
+      }
+
+      try {
+        cryptoKey = await importKey(keyStr);
+      } catch {
+        showError('Invalid key', 'The encryption key in the URL is invalid.');
+        return;
+      }
+
+      createView.classList.add('hidden');
+      chatView.classList.remove('hidden');
+      chatView.style.display = 'flex';
+      document.getElementById('roomIdDisplay').textContent = roomId;
+
+      // Copy link button
+      document.getElementById('copyLinkBtn').addEventListener('click', () => {
+        navigator.clipboard.writeText(location.href).then(() => {
+          const btn = document.getElementById('copyLinkBtn');
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+        });
+      });
+
+      // WebSocket connection
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/chat/${roomId}`);
+
+      ws.addEventListener('open', () => {
+        addSystemMsg('connected');
+        document.getElementById('msgInput').focus();
+      });
+
+      ws.addEventListener('message', async (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === 'init') {
+            myPeerId = msg.peer;
+            document.getElementById('peerCount').textContent = msg.count;
+            addSystemMsg(`you are ${msg.peer}`);
+          } else if (msg.type === 'join') {
+            document.getElementById('peerCount').textContent = msg.count;
+            addSystemMsg(`${msg.peer} joined`);
+          } else if (msg.type === 'leave') {
+            document.getElementById('peerCount').textContent = msg.count;
+            addSystemMsg(`${msg.peer} left`);
+          } else if (msg.type === 'msg') {
+            const text = await decryptMsg(msg.data, msg.iv, cryptoKey);
+            const isSelf = msg.from === myPeerId;
+            const cls = isSelf ? 'msg-self' : 'msg-other';
+            const peerLabel = isSelf ? '' : `<div class="msg-peer">${esc(msg.from)}</div>`;
+            addMessage(peerLabel + esc(text), cls);
+          }
+        } catch {
+          // Decryption failed or malformed message — silently ignore
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        addMessage('disconnected &mdash; room closed or connection lost', 'msg-error');
+        document.getElementById('sendBtn').disabled = true;
+        document.getElementById('msgInput').disabled = true;
+      });
+
+      ws.addEventListener('error', () => {
+        if (!myPeerId) {
+          showError('Connection failed', 'Could not connect to the chat room. The server may be unavailable.');
+        }
+      });
+    }
+
+    // --- Send message ---
+
+    async function sendMessage() {
+      const input = document.getElementById('msgInput');
+      const text = input.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      try {
+        const { data, iv } = await encryptMsg(text, cryptoKey);
+        ws.send(JSON.stringify({ type: 'msg', data, iv }));
+        input.value = '';
+        input.focus();
+      } catch {
+        addMessage('failed to encrypt message', 'msg-error');
+      }
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('msgInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    // --- Route ---
+
+    if (location.pathname.match(/^\/chat\/[a-zA-Z0-9]+$/)) {
+      joinRoom();
+    }
+  </script>
+</body>
+</html>

@@ -278,6 +278,14 @@
           <div class="label">Active Drops</div>
           <div class="value" id="dropCount">--</div>
         </div>
+        <div class="card">
+          <div class="label">Chat Rooms</div>
+          <div class="value" id="chatRoomCount">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Chat Peers</div>
+          <div class="value" id="chatPeerCount">--</div>
+        </div>
       </div>
       <div class="section">
         <div class="section-header"><h2>Recent Activity</h2></div>
@@ -580,6 +588,12 @@
         const res = await fetch('/api/drops/stats');
         const d = await res.json();
         document.getElementById('dropCount').textContent = d.active;
+      } catch {}
+      try {
+        const res = await fetch('/api/chat/stats');
+        const d = await res.json();
+        document.getElementById('chatRoomCount').textContent = d.rooms;
+        document.getElementById('chatPeerCount').textContent = d.clients;
       } catch {}
     }
 

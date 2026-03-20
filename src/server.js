@@ -89,7 +89,7 @@ app.use(session({
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check' || req.path.startsWith('/drop') || req.path.startsWith('/api/drop')) return;
+    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check' || req.path.startsWith('/drop') || req.path.startsWith('/api/drop') || req.path.startsWith('/chat') || req.path.startsWith('/api/chat')) return;
     requestLog.unshift({
       time: new Date().toISOString(),
       method: req.method,
@@ -173,6 +173,11 @@ app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
 app.use('/landing.html', express.static(path.join(__dirname, 'public', 'landing.html')));
+
+// --- Signal Room (encrypted chat) ---
+
+app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
+app.get('/chat/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 
 // --- Dead Drop (anonymous paste bin) ---
 
@@ -446,8 +451,161 @@ app.post('/api/drops/purge-expired', async (req, res) => {
   res.json({ purged: count });
 });
 
+// --- API: Chat stats (admin) ---
+
+const chatRooms = new Map(); // roomId -> Set<ws>
+
+app.get('/api/chat/stats', (req, res) => {
+  let totalClients = 0;
+  for (const clients of chatRooms.values()) totalClients += clients.size;
+  res.json({ rooms: chatRooms.size, clients: totalClients });
+});
+
 // --- Start ---
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// --- WebSocket relay for Signal Room ---
+
+const { WebSocketServer } = require('ws');
+
+const MAX_MSG_SIZE = 65536; // 64 KB
+const MAX_ROOM_SIZE = 50;
+const MAX_ROOMS = 1000;
+const MAX_CONNECTIONS_PER_IP = 10;
+const MAX_TOTAL_CONNECTIONS = 500;
+const RATE_LIMIT = 10; // messages per second
+const ipConnections = new Map(); // ip -> count
+
+const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MSG_SIZE });
+
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const match = url.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
+  if (!match) {
+    socket.destroy();
+    return;
+  }
+  const roomId = match[1];
+
+  // Global connection limit
+  if (wss.clients.size >= MAX_TOTAL_CONNECTIONS) {
+    socket.destroy();
+    return;
+  }
+
+  // Per-IP connection limit
+  const ip = request.headers['x-forwarded-for']?.split(',')[0]?.trim() || request.socket.remoteAddress;
+  const ipCount = ipConnections.get(ip) || 0;
+  if (ipCount >= MAX_CONNECTIONS_PER_IP) {
+    socket.destroy();
+    return;
+  }
+
+  // Room count limit (only for new rooms)
+  if (!chatRooms.has(roomId) && chatRooms.size >= MAX_ROOMS) {
+    socket.destroy();
+    return;
+  }
+
+  // Reject if room is full
+  const room = chatRooms.get(roomId);
+  if (room && room.size >= MAX_ROOM_SIZE) {
+    socket.destroy();
+    return;
+  }
+
+  // Track IP
+  ipConnections.set(ip, ipCount + 1);
+
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, roomId, ip);
+  });
+});
+
+wss.on('connection', (ws, roomId, ip) => {
+  // Assign anonymous peer ID
+  const peerId = crypto.randomBytes(2).toString('hex');
+
+  // Add to room
+  if (!chatRooms.has(roomId)) chatRooms.set(roomId, new Set());
+  const room = chatRooms.get(roomId);
+  room.add(ws);
+
+  // Rate limiting state
+  let msgCount = 0;
+  const rateLimitInterval = setInterval(() => { msgCount = 0; }, 1000);
+
+  // Send init to joining peer
+  ws.send(JSON.stringify({ type: 'init', peer: peerId, count: room.size }));
+
+  // Broadcast join to others
+  for (const peer of room) {
+    if (peer !== ws && peer.readyState === 1) {
+      peer.send(JSON.stringify({ type: 'join', peer: peerId, count: room.size }));
+    }
+  }
+
+  ws.on('message', (data) => {
+    // Rate limit
+    msgCount++;
+    if (msgCount > RATE_LIMIT) return;
+
+    // Size limit
+    const raw = typeof data === 'string' ? data : data.toString();
+    if (raw.length > MAX_MSG_SIZE) return;
+
+    // Validate it looks like JSON with type "msg" (but don't parse content)
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (parsed.type !== 'msg' || !parsed.data || !parsed.iv) return;
+
+    // Attach peer ID and broadcast to ALL in room (including sender for confirmation)
+    const relay = JSON.stringify({ type: 'msg', data: parsed.data, iv: parsed.iv, from: peerId });
+    for (const peer of room) {
+      if (peer.readyState === 1) {
+        peer.send(relay);
+      }
+    }
+  });
+
+  ws.on('close', () => {
+    clearInterval(rateLimitInterval);
+    room.delete(ws);
+
+    // Release IP slot
+    const count = ipConnections.get(ip) || 1;
+    if (count <= 1) ipConnections.delete(ip);
+    else ipConnections.set(ip, count - 1);
+
+    if (room.size === 0) {
+      chatRooms.delete(roomId);
+    } else {
+      // Broadcast leave
+      for (const peer of room) {
+        if (peer.readyState === 1) {
+          peer.send(JSON.stringify({ type: 'leave', peer: peerId, count: room.size }));
+        }
+      }
+    }
+  });
+
+  // Heartbeat
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+});
+
+// Heartbeat interval to clean stale connections
+const heartbeat = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
