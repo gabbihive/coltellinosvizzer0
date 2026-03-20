@@ -392,16 +392,60 @@
   <footer>no logs &middot; no storage &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
-    // --- Security hardening ---
+    'use strict';
 
-    if (!crypto?.subtle) {
-      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
-      throw new Error('Web Crypto unavailable');
+    // ============================================================
+    // RUNTIME INTEGRITY PREAMBLE
+    // ============================================================
+
+    const _freeze = Object.freeze;
+    const _toString = Function.prototype.toString;
+    const _call = Function.prototype.call;
+    const _bind = Function.prototype.bind;
+    const _subtle = crypto.subtle;
+    const _getRandomValues = _bind.call(crypto.getRandomValues, crypto);
+    const _randomUUID = _bind.call(crypto.randomUUID, crypto);
+    const _Uint8Array = Uint8Array;
+    const _TextEncoder = TextEncoder;
+    const _TextDecoder = TextDecoder;
+    const _btoa = btoa;
+    const _atob = atob;
+    const _fromCharCode = String.fromCharCode;
+    const _setTimeout = setTimeout;
+    const _JSON_parse = JSON.parse;
+    const _JSON_stringify = JSON.stringify;
+    const _replaceState = _bind.call(history.replaceState, history);
+    const _WebSocket = WebSocket;
+    const _fetch = fetch;
+
+    function _assertNative(fn, name) {
+      const s = _call.call(_toString, fn);
+      if (!s.includes('[native code]')) {
+        document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime: ' + name; document.body.appendChild(p);
+        throw new Error('Tampered: ' + name);
+      }
     }
+    _assertNative(crypto.subtle.generateKey, 'generateKey');
+    _assertNative(crypto.subtle.encrypt, 'encrypt');
+    _assertNative(crypto.subtle.decrypt, 'decrypt');
+    _assertNative(crypto.subtle.importKey, 'importKey');
+    _assertNative(crypto.subtle.exportKey, 'exportKey');
+    _assertNative(crypto.getRandomValues, 'getRandomValues');
+    _assertNative(_WebSocket, 'WebSocket');
+    _assertNative(_fetch, 'fetch');
+
+    if (!window.isSecureContext) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Insecure context. HTTPS required.</p>';
+      throw new Error('Insecure context');
+    }
+
+    _freeze(Object.prototype);
+    _freeze(Array.prototype);
+
     (function() {
-      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      const t = new _Uint8Array(32); _getRandomValues(t);
       if (t.every(b => b === 0)) {
-        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure.</p>';
         throw new Error('RNG failure');
       }
     })();
@@ -413,23 +457,51 @@
     try { localStorage.clear(); sessionStorage.clear(); } catch {}
     try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
 
+    // ============================================================
+    // SECURITY UTILITIES
+    // ============================================================
+
+    function wipeBuffer(buf) {
+      if (buf instanceof ArrayBuffer) new _Uint8Array(buf).fill(0);
+      else if (buf?.buffer) buf.fill(0);
+    }
+
+    function secureClearElement(el) {
+      if (!el) return;
+      const isInput = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
+      const content = isInput ? el.value : el.textContent;
+      if (!content || !content.length) return;
+      const len = content.length;
+      const rand = new _Uint8Array(len);
+      _getRandomValues(rand);
+      let overwrite = '';
+      for (let i = 0; i < len; i++) overwrite += _fromCharCode(33 + (rand[i] % 94));
+      if (isInput) { el.value = overwrite; el.value = ''; }
+      else { el.textContent = overwrite; el.textContent = ''; }
+      wipeBuffer(rand);
+    }
+
     function safeCopy(text) {
       return navigator.clipboard.writeText(text).then(() => {
-        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+        _setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
       });
     }
 
     function chatCleanup() {
-      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+      if (ws && ws.readyState === _WebSocket.OPEN) ws.close();
       ws = null;
       cryptoKey = null;
       myPeerId = null;
+      savedRoomUrl = null;
+      // Overwrite each message before removing
       const msgs = document.getElementById('messages');
-      if (msgs) msgs.innerHTML = '';
-      const input = document.getElementById('msgInput');
-      if (input) { input.value = ''; }
-      const urlText = document.getElementById('resultUrlText');
-      if (urlText) urlText.textContent = '';
+      if (msgs) {
+        const children = msgs.querySelectorAll('.msg');
+        children.forEach(child => secureClearElement(child));
+        msgs.innerHTML = '';
+      }
+      secureClearElement(document.getElementById('msgInput'));
+      secureClearElement(document.getElementById('resultUrlText'));
       navigator.clipboard.writeText('').catch(() => {});
     }
     window.addEventListener('pagehide', chatCleanup);
@@ -443,81 +515,80 @@
     let ws = null;
     let cryptoKey = null;
     let myPeerId = null;
+    let savedRoomUrl = null;
 
-    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+    // ============================================================
+    // CRYPTO HELPERS (frozen references throughout)
+    // ============================================================
 
     async function generateKey() {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
+      const key = await _subtle.generateKey(
+        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
       );
-      const raw = await crypto.subtle.exportKey('raw', key);
-      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+      const raw = await _subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new _Uint8Array(raw)) };
     }
 
     async function importKey(encoded) {
       const raw = base64ToBuf(encoded);
-      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      return _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     }
 
     async function encryptMsg(text, key) {
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encoded = new TextEncoder().encode(text);
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encoded
-      );
+      const iv = _getRandomValues(new _Uint8Array(12));
+      const encoded = new _TextEncoder().encode(text);
+      const ciphertext = await _subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+      wipeBuffer(encoded); // zero plaintext bytes immediately
       return {
-        data: bufToBase64(new Uint8Array(ciphertext)),
+        data: bufToBase64(new _Uint8Array(ciphertext)),
         iv: bufToBase64(iv),
       };
     }
 
+    // Returns Uint8Array — caller must decode + wipe in tight block
     async function decryptMsg(dataB64, ivB64, key) {
       const ciphertext = base64ToBuf(dataB64);
       const iv = base64ToBuf(ivB64);
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        ciphertext
-      );
-      return new TextDecoder().decode(decrypted);
+      const decrypted = await _subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      const arr = new _Uint8Array(decrypted);
+      wipeBuffer(ciphertext);
+      wipeBuffer(iv);
+      return arr;
     }
 
     function bufToBase64(buf) {
       let binary = '';
-      for (const b of buf) binary += String.fromCharCode(b);
-      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      for (const b of buf) binary += _fromCharCode(b);
+      return _btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
     function base64ToBuf(str) {
       const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-      const binary = atob(b64);
-      const buf = new Uint8Array(binary.length);
+      const binary = _atob(b64);
+      const buf = new _Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
       return buf;
     }
 
-    function esc(str) {
-      const d = document.createElement('div');
-      d.textContent = str;
-      return d.innerHTML;
-    }
+    // ============================================================
+    // UI HELPERS
+    // ============================================================
 
-    // --- UI helpers ---
-
-    function addMessage(html, cls) {
+    // System/error messages use textContent (no innerHTML for any messages)
+    function addSystemMsg(text) {
       const div = document.createElement('div');
-      div.className = 'msg ' + cls;
-      div.innerHTML = html;
+      div.className = 'msg msg-system';
+      div.textContent = text;
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function addSystemMsg(text) {
-      addMessage(esc(text), 'msg-system');
+    function addErrorMsg(text) {
+      const div = document.createElement('div');
+      div.className = 'msg msg-error';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function showError(title, desc) {
@@ -528,10 +599,12 @@
       errorView.style.display = 'block';
     }
 
-    // --- Create room ---
+    // ============================================================
+    // CREATE ROOM
+    // ============================================================
 
     document.getElementById('createBtn').addEventListener('click', async () => {
-      const roomId = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+      const roomId = _randomUUID().replace(/-/g, '').slice(0, 16);
       const { encoded: keyStr } = await generateKey();
       const url = `${location.origin}/chat/${roomId}#${keyStr}`;
 
@@ -542,15 +615,17 @@
         safeCopy(url).then(() => {
           const hint = document.querySelector('.copy-hint');
           hint.textContent = 'copied (auto-clears 30s)';
-          setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
+          _setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
         });
       });
 
       // Navigate to the room
-      setTimeout(() => { location.href = url; }, 300);
+      _setTimeout(() => { location.href = url; }, 300);
     });
 
-    // --- Join room ---
+    // ============================================================
+    // JOIN ROOM
+    // ============================================================
 
     async function joinRoom() {
       const match = location.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
@@ -560,7 +635,7 @@
       const keyStr = location.hash.slice(1);
 
       // Strip key from URL bar and history immediately
-      if (location.hash) history.replaceState(null, '', location.pathname);
+      if (location.hash) _replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The encryption key was not found in the URL. The link may be incomplete.');
@@ -579,18 +654,19 @@
       document.getElementById('roomIdDisplay').textContent = roomId;
 
       // Copy link button (reconstruct full URL since hash was stripped from history)
-      const fullRoomUrl = `${location.origin}/chat/${roomId}#${keyStr}`;
+      savedRoomUrl = `${location.origin}/chat/${roomId}#${keyStr}`;
       document.getElementById('copyLinkBtn').addEventListener('click', () => {
-        safeCopy(fullRoomUrl).then(() => {
+        if (!savedRoomUrl) return;
+        safeCopy(savedRoomUrl).then(() => {
           const btn = document.getElementById('copyLinkBtn');
           btn.textContent = 'Copied (auto-clears 30s)';
-          setTimeout(() => { btn.textContent = 'Copy link'; }, 3000);
+          _setTimeout(() => { btn.textContent = 'Copy link'; }, 3000);
         });
       });
 
       // WebSocket connection
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${location.host}/chat/${roomId}`);
+      ws = new _WebSocket(`${proto}//${location.host}/chat/${roomId}`);
 
       ws.addEventListener('open', () => {
         addSystemMsg('connected');
@@ -599,7 +675,7 @@
 
       ws.addEventListener('message', async (event) => {
         try {
-          const msg = JSON.parse(event.data);
+          const msg = _JSON_parse(event.data);
 
           if (msg.type === 'init') {
             myPeerId = msg.peer;
@@ -612,11 +688,24 @@
             document.getElementById('peerCount').textContent = msg.count;
             addSystemMsg(`${msg.peer} left`);
           } else if (msg.type === 'msg') {
-            const text = await decryptMsg(msg.data, msg.iv, cryptoKey);
+            const plainBytes = await decryptMsg(msg.data, msg.iv, cryptoKey);
+            // TIGHT BLOCK: decode, render, wipe — no async gaps
+            const text = new _TextDecoder().decode(plainBytes);
             const isSelf = msg.from === myPeerId;
-            const cls = isSelf ? 'msg-self' : 'msg-other';
-            const peerLabel = isSelf ? '' : `<div class="msg-peer">${esc(msg.from)}</div>`;
-            addMessage(peerLabel + esc(text), cls);
+            const div = document.createElement('div');
+            div.className = 'msg ' + (isSelf ? 'msg-self' : 'msg-other');
+            if (!isSelf) {
+              const peer = document.createElement('div');
+              peer.className = 'msg-peer';
+              peer.textContent = msg.from;
+              div.appendChild(peer);
+            }
+            const span = document.createElement('span');
+            span.textContent = text;
+            div.appendChild(span);
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            wipeBuffer(plainBytes);
           }
         } catch {
           // Decryption failed or malformed message — silently ignore
@@ -624,7 +713,7 @@
       });
 
       ws.addEventListener('close', () => {
-        addMessage('disconnected &mdash; room closed or connection lost', 'msg-error');
+        addErrorMsg('disconnected \u2014 room closed or connection lost');
         document.getElementById('sendBtn').disabled = true;
         document.getElementById('msgInput').disabled = true;
       });
@@ -636,20 +725,22 @@
       });
     }
 
-    // --- Send message ---
+    // ============================================================
+    // SEND MESSAGE
+    // ============================================================
 
     async function sendMessage() {
       const input = document.getElementById('msgInput');
       const text = input.value.trim();
-      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!text || !ws || ws.readyState !== _WebSocket.OPEN) return;
 
       try {
         const { data, iv } = await encryptMsg(text, cryptoKey);
-        ws.send(JSON.stringify({ type: 'msg', data, iv }));
+        ws.send(_JSON_stringify({ type: 'msg', data, iv }));
         input.value = '';
         input.focus();
       } catch {
-        addMessage('failed to encrypt message', 'msg-error');
+        addErrorMsg('failed to encrypt message');
       }
     }
 
@@ -658,8 +749,7 @@
       if (e.key === 'Enter') sendMessage();
     });
 
-    // --- Route ---
-
+    // Route
     if (location.pathname.match(/^\/chat\/[a-zA-Z0-9]+$/)) {
       joinRoom();
     }

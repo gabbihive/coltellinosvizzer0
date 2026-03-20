@@ -417,16 +417,64 @@
   <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
-    // --- Security hardening ---
+    'use strict';
 
-    if (!crypto?.subtle) {
-      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
-      throw new Error('Web Crypto unavailable');
+    // ============================================================
+    // RUNTIME INTEGRITY PREAMBLE
+    // ============================================================
+
+    const _freeze = Object.freeze;
+    const _toString = Function.prototype.toString;
+    const _call = Function.prototype.call;
+    const _bind = Function.prototype.bind;
+    const _subtle = crypto.subtle;
+    const _getRandomValues = _bind.call(crypto.getRandomValues, crypto);
+    const _Uint8Array = Uint8Array;
+    const _TextEncoder = TextEncoder;
+    const _TextDecoder = TextDecoder;
+    const _Blob = Blob;
+    const _fetch = fetch;
+    const _btoa = btoa;
+    const _atob = atob;
+    const _fromCharCode = String.fromCharCode;
+    const _setTimeout = setTimeout;
+    const _JSON_parse = JSON.parse;
+    const _JSON_stringify = JSON.stringify;
+    const _replaceState = _bind.call(history.replaceState, history);
+    const _createObjectURL = _bind.call(URL.createObjectURL, URL);
+    const _revokeObjectURL = _bind.call(URL.revokeObjectURL, URL);
+
+    function _assertNative(fn, name) {
+      const s = _call.call(_toString, fn);
+      if (!s.includes('[native code]')) {
+        document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime: ' + name; document.body.appendChild(p);
+        throw new Error('Tampered: ' + name);
+      }
     }
+    _assertNative(crypto.subtle.generateKey, 'generateKey');
+    _assertNative(crypto.subtle.encrypt, 'encrypt');
+    _assertNative(crypto.subtle.decrypt, 'decrypt');
+    _assertNative(crypto.subtle.importKey, 'importKey');
+    _assertNative(crypto.subtle.exportKey, 'exportKey');
+    _assertNative(crypto.getRandomValues, 'getRandomValues');
+    _assertNative(_fetch, 'fetch');
+    _assertNative(_btoa, 'btoa');
+    _assertNative(_atob, 'atob');
+    _assertNative(URL.createObjectURL, 'createObjectURL');
+    _assertNative(URL.revokeObjectURL, 'revokeObjectURL');
+
+    if (!window.isSecureContext) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Insecure context. HTTPS required.</p>';
+      throw new Error('Insecure context');
+    }
+
+    _freeze(Object.prototype);
+    _freeze(Array.prototype);
+
     (function() {
-      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      const t = new _Uint8Array(32); _getRandomValues(t);
       if (t.every(b => b === 0)) {
-        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure.</p>';
         throw new Error('RNG failure');
       }
     })();
@@ -438,24 +486,48 @@
     try { localStorage.clear(); sessionStorage.clear(); } catch {}
     try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
 
+    // ============================================================
+    // SECURITY UTILITIES
+    // ============================================================
+
     function wipeBuffer(buf) {
-      if (buf instanceof ArrayBuffer) new Uint8Array(buf).fill(0);
+      if (buf instanceof ArrayBuffer) new _Uint8Array(buf).fill(0);
       else if (buf?.buffer) buf.fill(0);
+    }
+
+    function secureClearElement(el) {
+      if (!el) return;
+      const isInput = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
+      const content = isInput ? el.value : el.textContent;
+      if (!content || !content.length) return;
+      const len = content.length;
+      const rand = new _Uint8Array(len);
+      _getRandomValues(rand);
+      let overwrite = '';
+      for (let i = 0; i < len; i++) overwrite += _fromCharCode(33 + (rand[i] % 94));
+      if (isInput) { el.value = overwrite; el.value = ''; }
+      else { el.textContent = overwrite; el.textContent = ''; }
+      wipeBuffer(rand);
     }
 
     function safeCopy(text) {
       return navigator.clipboard.writeText(text).then(() => {
-        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+        _setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
       });
     }
+
+    let activeBlobUrl = null;
 
     function fileCleanup() {
       if (processedBuffer) { wipeBuffer(processedBuffer); processedBuffer = null; }
       selectedFile = null;
+      if (activeBlobUrl) { _revokeObjectURL(activeBlobUrl); activeBlobUrl = null; }
       if (decryptedBlob) { decryptedBlob = null; }
       decryptedName = 'download';
-      const urlText = document.getElementById('resultUrlText');
-      if (urlText) urlText.textContent = '';
+      secureClearElement(document.getElementById('resultUrlText'));
+      secureClearElement(document.getElementById('dlFileName'));
+      secureClearElement(document.getElementById('dlFileSize'));
+      secureClearElement(document.getElementById('fileName'));
       const fi = document.getElementById('fileInput');
       if (fi) fi.value = '';
       navigator.clipboard.writeText('').catch(() => {});
@@ -475,52 +547,55 @@
     const fileInput = document.getElementById('fileInput');
     const dropZone = document.getElementById('dropZone');
 
-    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+    // ============================================================
+    // CRYPTO HELPERS (frozen references throughout)
+    // ============================================================
 
     async function generateKey() {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
+      const key = await _subtle.generateKey(
+        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
       );
-      const raw = await crypto.subtle.exportKey('raw', key);
-      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+      const raw = await _subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new _Uint8Array(raw)) };
     }
 
     async function importKey(encoded) {
       const raw = base64ToBuf(encoded);
-      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      return _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     }
 
     async function encryptBytes(data, key) {
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv }, key, data
-      );
-      return { encrypted: bufToBase64(new Uint8Array(ciphertext)), iv: bufToBase64(iv) };
+      const iv = _getRandomValues(new _Uint8Array(12));
+      const ciphertext = await _subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+      return { encrypted: bufToBase64(new _Uint8Array(ciphertext)), iv: bufToBase64(iv) };
     }
 
     async function decryptBytes(encryptedB64, ivB64, key) {
       const ciphertext = base64ToBuf(encryptedB64);
       const iv = base64ToBuf(ivB64);
-      return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      const result = await _subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      wipeBuffer(ciphertext);
+      wipeBuffer(iv);
+      return result;
     }
 
     function bufToBase64(buf) {
       let binary = '';
-      for (const b of buf) binary += String.fromCharCode(b);
-      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      for (const b of buf) binary += _fromCharCode(b);
+      return _btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
     function base64ToBuf(str) {
       const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-      const binary = atob(b64);
-      const buf = new Uint8Array(binary.length);
+      const binary = _atob(b64);
+      const buf = new _Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
       return buf;
     }
 
-    // --- Metadata stripping ---
+    // ============================================================
+    // METADATA STRIPPING
+    // ============================================================
 
     async function stripImageMetadata(file) {
       const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -528,14 +603,14 @@
 
       return new Promise((resolve, reject) => {
         const img = new Image();
-        const url = URL.createObjectURL(file);
+        const url = _createObjectURL(file);
         img.onload = () => {
           const canvas = document.createElement('canvas');
           canvas.width = img.naturalWidth;
           canvas.height = img.naturalHeight;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(url);
+          _revokeObjectURL(url);
           const quality = file.type === 'image/png' ? undefined : 0.95;
           canvas.toBlob((blob) => {
             if (blob) blob.arrayBuffer().then(resolve).catch(reject);
@@ -543,14 +618,16 @@
           }, file.type, quality);
         };
         img.onerror = () => {
-          URL.revokeObjectURL(url);
+          _revokeObjectURL(url);
           reject(new Error('Image load failed'));
         };
         img.src = url;
       });
     }
 
-    // --- Helpers ---
+    // ============================================================
+    // HELPERS
+    // ============================================================
 
     function formatSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
@@ -575,7 +652,9 @@
       errorView.classList.remove('hidden');
     }
 
-    // --- Upload mode ---
+    // ============================================================
+    // UPLOAD MODE
+    // ============================================================
 
     let selectedFile = null;
     let processedBuffer = null;
@@ -644,6 +723,7 @@
     }
 
     document.getElementById('clearFile').addEventListener('click', () => {
+      if (processedBuffer) { wipeBuffer(processedBuffer); }
       selectedFile = null;
       processedBuffer = null;
       wasMetadataStripped = false;
@@ -667,17 +747,18 @@
         // Encrypt file content
         const { encrypted, iv } = await encryptBytes(processedBuffer, key);
 
-        // Encrypt metadata (filename + type)
-        const meta = JSON.stringify({ name: selectedFile.name, type: selectedFile.type });
-        const metaBytes = new TextEncoder().encode(meta);
+        // Encrypt metadata (filename + type), wipe plaintext meta immediately
+        const meta = _JSON_stringify({ name: selectedFile.name, type: selectedFile.type });
+        const metaBytes = new _TextEncoder().encode(meta);
         const { encrypted: encryptedMeta, iv: metaIv } = await encryptBytes(metaBytes, key);
+        wipeBuffer(metaBytes);
 
         btn.textContent = 'Uploading...';
 
-        const res = await fetch('/api/file', {
+        const res = await _fetch('/api/file', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: _JSON_stringify({
             encrypted,
             iv,
             encryptedMeta,
@@ -722,11 +803,13 @@
       safeCopy(url).then(() => {
         const hint = document.querySelector('.copy-hint');
         hint.textContent = 'copied (auto-clears 30s)';
-        setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
+        _setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
       });
     });
 
-    // --- Download mode ---
+    // ============================================================
+    // DOWNLOAD MODE
+    // ============================================================
 
     let decryptedBlob = null;
     let decryptedName = 'download';
@@ -739,7 +822,7 @@
       const keyStr = location.hash.slice(1);
 
       // Strip key from URL bar and history immediately
-      if (location.hash) history.replaceState(null, '', location.pathname);
+      if (location.hash) _replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');
@@ -750,7 +833,7 @@
       downloadView.classList.remove('hidden');
 
       try {
-        const res = await fetch(`/api/file/${id}`);
+        const res = await _fetch(`/api/file/${id}`);
         if (!res.ok) {
           showError('Not found', 'This file has expired, been burned, or never existed.');
           return;
@@ -759,22 +842,25 @@
         const data = await res.json();
         const key = await importKey(keyStr);
 
-        // Decrypt metadata
+        // Decrypt metadata — tight block: decode, parse, wipe
         const metaBuffer = await decryptBytes(data.encryptedMeta, data.metaIv, key);
-        const meta = JSON.parse(new TextDecoder().decode(metaBuffer));
+        const metaArr = new _Uint8Array(metaBuffer);
+        const meta = _JSON_parse(new _TextDecoder().decode(metaArr));
+        wipeBuffer(metaArr);
 
         if (typeof meta.name !== 'string') throw new Error('Invalid metadata');
 
-        // Decrypt file content
+        // Decrypt file content — tight block: decrypt, blob, wipe
         const fileBuffer = await decryptBytes(data.encrypted, data.iv, key);
-
+        const fileSize = fileBuffer.byteLength;
         decryptedName = meta.name.replace(/[/\\]/g, '_'); // sanitize path separators
         const mimeType = (typeof meta.type === 'string' && meta.type) ? meta.type : 'application/octet-stream';
-        decryptedBlob = new Blob([fileBuffer], { type: mimeType });
+        decryptedBlob = new _Blob([fileBuffer], { type: mimeType });
+        wipeBuffer(new _Uint8Array(fileBuffer)); // zero source after Blob copies
 
         // Update UI
         document.getElementById('dlFileName').textContent = decryptedName;
-        document.getElementById('dlFileSize').textContent = formatSize(fileBuffer.byteLength);
+        document.getElementById('dlFileSize').textContent = formatSize(fileSize);
         document.getElementById('downloadBtn').textContent = 'Download';
         document.getElementById('downloadBtn').disabled = false;
 
@@ -788,19 +874,21 @@
 
     document.getElementById('downloadBtn').addEventListener('click', () => {
       if (!decryptedBlob) return;
-      const url = URL.createObjectURL(decryptedBlob);
+      const url = _createObjectURL(decryptedBlob);
+      activeBlobUrl = url;
       const a = document.createElement('a');
       a.href = url;
       a.download = decryptedName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      // Revoke immediately and wipe blob reference
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
+      // Revoke quickly and wipe blob reference
+      _setTimeout(() => {
+        _revokeObjectURL(url);
+        activeBlobUrl = null;
         decryptedBlob = null;
         decryptedName = 'download';
-      }, 1000);
+      }, 500);
     });
 
     // Route

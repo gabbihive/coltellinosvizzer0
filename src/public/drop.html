@@ -352,57 +352,114 @@
   <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
-    // --- Security hardening ---
+    'use strict';
 
-    // Verify crypto availability
-    if (!crypto?.subtle) {
-      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
-      throw new Error('Web Crypto unavailable');
+    // ============================================================
+    // RUNTIME INTEGRITY PREAMBLE
+    // ============================================================
+
+    // Frozen built-in references (captured before any tampering)
+    const _freeze = Object.freeze;
+    const _toString = Function.prototype.toString;
+    const _call = Function.prototype.call;
+    const _bind = Function.prototype.bind;
+    const _subtle = crypto.subtle;
+    const _getRandomValues = _bind.call(crypto.getRandomValues, crypto);
+    const _Uint8Array = Uint8Array;
+    const _TextEncoder = TextEncoder;
+    const _TextDecoder = TextDecoder;
+    const _fetch = fetch;
+    const _btoa = btoa;
+    const _atob = atob;
+    const _fromCharCode = String.fromCharCode;
+    const _setTimeout = setTimeout;
+    const _JSON_stringify = JSON.stringify;
+    const _replaceState = _bind.call(history.replaceState, history);
+
+    // Native function integrity checks
+    function _assertNative(fn, name) {
+      const s = _call.call(_toString, fn);
+      if (!s.includes('[native code]')) {
+        document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime: ' + name; document.body.appendChild(p);
+        throw new Error('Tampered: ' + name);
+      }
     }
+    _assertNative(crypto.subtle.generateKey, 'generateKey');
+    _assertNative(crypto.subtle.encrypt, 'encrypt');
+    _assertNative(crypto.subtle.decrypt, 'decrypt');
+    _assertNative(crypto.subtle.importKey, 'importKey');
+    _assertNative(crypto.subtle.exportKey, 'exportKey');
+    _assertNative(crypto.getRandomValues, 'getRandomValues');
+    _assertNative(_fetch, 'fetch');
+    _assertNative(_btoa, 'btoa');
+    _assertNative(_atob, 'atob');
+
+    // Secure context verification
+    if (!window.isSecureContext) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Insecure context. HTTPS required.</p>';
+      throw new Error('Insecure context');
+    }
+
+    // Prototype pollution prevention
+    _freeze(Object.prototype);
+    _freeze(Array.prototype);
+
+    // CSPRNG test
     (function() {
-      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      const t = new _Uint8Array(32); _getRandomValues(t);
       if (t.every(b => b === 0)) {
-        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure.</p>';
         throw new Error('RNG failure');
       }
     })();
 
-    // Unregister any service workers (prevent persistent compromise)
+    // Service worker prevention
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
     }
 
-    // Nuke client-side storage (hostile to persistent exfiltration)
+    // Storage lockdown
     try { localStorage.clear(); sessionStorage.clear(); } catch {}
     try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
 
-    // Memory wipe utility
+    // ============================================================
+    // SECURITY UTILITIES
+    // ============================================================
+
     function wipeBuffer(buf) {
-      if (buf instanceof ArrayBuffer) new Uint8Array(buf).fill(0);
+      if (buf instanceof ArrayBuffer) new _Uint8Array(buf).fill(0);
       else if (buf?.buffer) buf.fill(0);
     }
 
-    // Clipboard auto-clear after copy
+    // Overwrite DOM element text with random data before clearing
+    function secureClearElement(el) {
+      if (!el) return;
+      const isInput = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT';
+      const content = isInput ? el.value : el.textContent;
+      if (!content || !content.length) return;
+      const len = content.length;
+      const rand = new _Uint8Array(len);
+      _getRandomValues(rand);
+      let overwrite = '';
+      for (let i = 0; i < len; i++) overwrite += _fromCharCode(33 + (rand[i] % 94));
+      if (isInput) { el.value = overwrite; el.value = ''; }
+      else { el.textContent = overwrite; el.textContent = ''; }
+      wipeBuffer(rand);
+    }
+
     function safeCopy(text) {
       return navigator.clipboard.writeText(text).then(() => {
-        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+        _setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
       });
     }
 
     // Page lifecycle cleanup
     let _cryptoKey = null;
     function cleanup() {
-      // Wipe textarea
-      const ta = document.getElementById('content');
-      if (ta && ta.value) { ta.value = '\0'.repeat(ta.value.length); ta.value = ''; }
-      // Wipe displayed content
-      const rc = document.getElementById('readContent');
-      if (rc) rc.textContent = '';
-      const ru = document.getElementById('resultUrlText');
-      if (ru) ru.textContent = '';
-      // Null out keys
+      secureClearElement(document.getElementById('content'));
+      secureClearElement(document.getElementById('readContent'));
+      secureClearElement(document.getElementById('resultUrlText'));
       _cryptoKey = null;
-      // Clear clipboard
       navigator.clipboard.writeText('').catch(() => {});
     }
     window.addEventListener('pagehide', cleanup);
@@ -410,7 +467,7 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         const ta = document.getElementById('content');
-        if (ta && ta.value) { ta.value = ''; }
+        if (ta && ta.value) ta.value = '';
       }
     });
 
@@ -418,63 +475,62 @@
     const readView = document.getElementById('readView');
     const errorView = document.getElementById('errorView');
 
-    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+    // ============================================================
+    // CRYPTO HELPERS (frozen references throughout)
+    // ============================================================
 
     async function generateKey() {
-      const key = await crypto.subtle.generateKey(
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt', 'decrypt']
+      const key = await _subtle.generateKey(
+        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
       );
-      const raw = await crypto.subtle.exportKey('raw', key);
-      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+      const raw = await _subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new _Uint8Array(raw)) };
     }
 
     async function importKey(encoded) {
       const raw = base64ToBuf(encoded);
-      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt']);
+      return _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt']);
     }
 
     async function encrypt(text, key) {
-      const iv = crypto.getRandomValues(new Uint8Array(12));
-      const encoded = new TextEncoder().encode(text);
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encoded
-      );
+      const iv = _getRandomValues(new _Uint8Array(12));
+      const encoded = new _TextEncoder().encode(text);
+      const ciphertext = await _subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+      wipeBuffer(encoded); // zero plaintext bytes immediately
       return {
-        encrypted: bufToBase64(new Uint8Array(ciphertext)),
+        encrypted: bufToBase64(new _Uint8Array(ciphertext)),
         iv: bufToBase64(iv),
       };
     }
 
+    // Returns Uint8Array — caller must decode + wipe in tight block
     async function decrypt(encryptedB64, ivB64, key) {
       const ciphertext = base64ToBuf(encryptedB64);
       const iv = base64ToBuf(ivB64);
-      const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        ciphertext
-      );
-      return new TextDecoder().decode(decrypted);
+      const decrypted = await _subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      const arr = new _Uint8Array(decrypted);
+      wipeBuffer(ciphertext);
+      wipeBuffer(iv);
+      return arr;
     }
 
     function bufToBase64(buf) {
       let binary = '';
-      for (const b of buf) binary += String.fromCharCode(b);
-      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      for (const b of buf) binary += _fromCharCode(b);
+      return _btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
     function base64ToBuf(str) {
       const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-      const binary = atob(b64);
-      const buf = new Uint8Array(binary.length);
+      const binary = _atob(b64);
+      const buf = new _Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
       return buf;
     }
 
-    // --- Compose mode ---
+    // ============================================================
+    // COMPOSE MODE
+    // ============================================================
 
     document.getElementById('encryptBtn').addEventListener('click', async () => {
       const content = document.getElementById('content').value.trim();
@@ -488,10 +544,10 @@
         const { key, encoded: keyStr } = await generateKey();
         const { encrypted, iv } = await encrypt(content, key);
 
-        const res = await fetch('/api/drop', {
+        const res = await _fetch('/api/drop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: _JSON_stringify({
             encrypted,
             iv,
             burn: document.getElementById('burn').checked,
@@ -517,7 +573,6 @@
           document.getElementById('resultWarn').textContent = '';
         }
 
-        // Clear the textarea
         document.getElementById('content').value = '';
       } catch (err) {
         alert(err.message);
@@ -532,7 +587,7 @@
       safeCopy(url).then(() => {
         const hint = document.querySelector('.copy-hint');
         hint.textContent = 'copied (auto-clears 30s)';
-        setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
+        _setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
       });
     });
 
@@ -541,11 +596,13 @@
       safeCopy(text).then(() => {
         const btn = document.getElementById('copyContentBtn');
         btn.textContent = 'Copied (auto-clears 30s)';
-        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 3000);
+        _setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 3000);
       });
     });
 
-    // --- Read mode ---
+    // ============================================================
+    // READ MODE
+    // ============================================================
 
     async function loadPaste() {
       const match = location.pathname.match(/^\/drop\/(.+)$/);
@@ -555,7 +612,7 @@
       const keyStr = location.hash.slice(1);
 
       // Strip key from URL bar and history immediately
-      if (location.hash) history.replaceState(null, '', location.pathname);
+      if (location.hash) _replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');
@@ -565,7 +622,7 @@
       composeView.style.display = 'none';
 
       try {
-        const res = await fetch(`/api/drop/${id}`);
+        const res = await _fetch(`/api/drop/${id}`);
         if (!res.ok) {
           showError('Not found', 'This drop has expired, been burned, or never existed.');
           return;
@@ -573,9 +630,12 @@
 
         const data = await res.json();
         const key = await importKey(keyStr);
-        const plaintext = await decrypt(data.encrypted, data.iv, key);
+        const plainBytes = await decrypt(data.encrypted, data.iv, key);
 
-        document.getElementById('readContent').textContent = plaintext;
+        // TIGHT BLOCK: decode, render, wipe — no async gaps
+        document.getElementById('readContent').textContent = new _TextDecoder().decode(plainBytes);
+        wipeBuffer(plainBytes);
+
         readView.style.display = 'block';
 
         if (data.burn) {

@@ -247,6 +247,20 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
 - **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
 
+**Runtime integrity hardening (all tool pages):**
+
+These defenses protect against browser extensions, injected scripts, or other code running in the same page context that attempts to intercept sensitive data by monkey-patching browser APIs.
+
+- **Frozen built-in references** — All critical browser APIs (`crypto.subtle.*`, `fetch`, `btoa`/`atob`, `TextEncoder`, `TextDecoder`, `Uint8Array`, `WebSocket`, `URL.createObjectURL`/`revokeObjectURL`, `JSON.parse`/`stringify`, `setTimeout`, `history.replaceState`) are captured into `const` variables at the very first line of the script, before any other code could tamper with them. All subsequent code uses these frozen references exclusively.
+- **Native function integrity checks** — After capturing references, the script verifies each critical function via `Function.prototype.toString.call(fn)` to confirm it contains `[native code]`. If any function has been replaced by a JavaScript wrapper (indicating monkey-patching), the page displays an error and refuses to operate. This catches extensions or injected scripts that replace `crypto.subtle.encrypt` with a wrapper that exfiltrates keys.
+- **Secure context enforcement** — `window.isSecureContext` is checked before any crypto operations. This blocks the page from running over plain HTTP (except localhost for development), preventing man-in-the-middle scenarios where crypto APIs might be unavailable or compromised.
+- **Prototype pollution prevention** — `Object.freeze(Object.prototype)` and `Object.freeze(Array.prototype)` are called at page load. This prevents prototype pollution attacks where an attacker adds malicious properties or methods to `Object.prototype` that would be inherited by all objects (a common attack vector in JavaScript).
+- **Strict mode** — All tool page scripts run under `'use strict'`, which means attempts to modify frozen prototypes throw `TypeError` instead of silently failing, making attacks more detectable.
+- **String avoidance for sensitive data** — JavaScript strings are immutable and garbage-collected unpredictably — once a string exists, you cannot wipe it from memory. To minimize plaintext string copies in the JS heap, decrypt functions return raw `Uint8Array` buffers. The caller decodes to string and assigns to the DOM in the tightest possible synchronous block, then immediately zeros the buffer. This doesn't eliminate the string (the DOM still holds it), but it removes the intermediate buffer copy.
+- **DOM overwrite before clear** — When sensitive content is removed from the DOM (on page unload, or when clearing elements), `secureClearElement()` first overwrites the element's text with random printable ASCII characters, then clears it. This means the browser's internal text buffer is overwritten before deallocation, making simple memory dump analysis harder.
+- **Tight decryption windows** — The sequence of decrypt → render to DOM → zero the source buffer happens in the shortest possible synchronous code path with no intervening `await` or event loop yields. This minimizes the time window during which both the buffer and the DOM string exist simultaneously.
+- **Blob URL lifecycle tracking** — In File Drop, active blob URLs are tracked in a module-level variable and revoked both on a 500ms timer (after download starts) and on page unload. No orphaned blob URLs can persist in memory.
+
 ---
 
 ## Dead Drop — Zero-Knowledge Paste Bin

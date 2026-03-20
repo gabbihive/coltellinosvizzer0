@@ -110,6 +110,17 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
 - **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
 
+### Runtime Integrity Hardening
+- **Frozen built-in references** — all critical browser APIs (`crypto.subtle`, `fetch`, `btoa`/`atob`, `TextEncoder`/`TextDecoder`, `WebSocket`, `URL.createObjectURL`) captured at script start and used via frozen references, preventing monkey-patching by malicious extensions or injected scripts
+- **Native function integrity checks** — `Function.prototype.toString` verification on all security-critical functions; page refuses to operate if any API has been tampered with
+- **Secure context enforcement** — `isSecureContext` check blocks execution on non-HTTPS connections (localhost allowed for development)
+- **Prototype pollution prevention** — `Object.freeze(Object.prototype)` and `Object.freeze(Array.prototype)` at page load blocks prototype pollution attacks
+- **Strict mode** — all tool page scripts run in strict mode; prototype modification attempts throw `TypeError` instead of silently failing
+- **String avoidance** — decrypt functions return raw `Uint8Array` instead of strings; callers decode and wipe the buffer in tight synchronous blocks, minimizing plaintext string copies lingering in the JavaScript heap
+- **DOM overwrite before clear** — sensitive DOM elements are overwritten with random printable ASCII data before clearing, making simple memory dump analysis harder
+- **Tight decryption windows** — decrypt, render to DOM, and zero the buffer all happen in the shortest possible synchronous code path with no intervening async operations
+- **Blob URL lifecycle tracking** — active blob URLs are tracked and revoked both on timer (500ms) and on page unload; no orphaned blob URLs can persist
+
 ## API
 
 All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, and `/api/chat` (public).
