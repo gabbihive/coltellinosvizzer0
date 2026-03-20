@@ -4,7 +4,6 @@ const os = require('os');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
-const prisma = require('./lib/prisma');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +17,18 @@ if (!ADMIN_PASS) {
   process.exit(1);
 }
 
+if (!process.env.SESSION_SECRET) {
+  console.warn('WARNING: SESSION_SECRET not set. Sessions will not survive restarts.');
+}
+
 // --- Password hashing (scrypt, no external deps) ---
+
+const initialPasswordHash = (() => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(ADMIN_PASS, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+})();
+let adminPasswordHash = null; // in-memory override (resets on restart)
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -35,43 +45,78 @@ function verifyHashedPassword(password, stored) {
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(storedHash));
 }
 
-async function verifyAdminPassword(password) {
-  // Check for DB-stored password override first
-  try {
-    const setting = await prisma.setting.findUnique({
-      where: { key: 'admin_password_hash' },
-    });
-    if (setting) {
-      return verifyHashedPassword(password, setting.value);
-    }
-  } catch {
-    // Setting table may not exist yet (pre-migration)
-  }
-  // Fall back to env var
-  const passBuffer = Buffer.from(password || '');
-  const adminBuffer = Buffer.from(ADMIN_PASS);
-  return passBuffer.length === adminBuffer.length &&
-    crypto.timingSafeEqual(passBuffer, adminBuffer);
+function verifyAdminPassword(password) {
+  return verifyHashedPassword(password, adminPasswordHash || initialPasswordHash);
 }
+
+// --- Login rate limiting ---
+
+const loginAttempts = new Map(); // ip -> { count, resetAt }
+
+function checkLoginRate(ip) {
+  const now = Date.now();
+  const attempt = loginAttempts.get(ip) || { count: 0, resetAt: now + 60000 };
+  if (now > attempt.resetAt) { attempt.count = 0; attempt.resetAt = now + 60000; }
+  if (attempt.count >= 5) return false;
+  attempt.count++;
+  loginAttempts.set(ip, attempt);
+  return true;
+}
+
+// --- In-memory paste store ---
+
+const pastes = new Map(); // id -> { encrypted, iv, burnAfterRead, expiresAt, createdAt }
+const PASTE_MAX_SIZE = 256 * 1024; // 256 KB
+const PASTE_MAX_COUNT = 10000;
+const PASTE_EXPIRY_OPTIONS = {
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+// Periodic cleanup of expired pastes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, paste] of pastes) {
+    if (paste.expiresAt <= now) pastes.delete(id);
+  }
+}, 60 * 1000);
 
 // --- Request log (in-memory ring buffer) ---
 
 const requestLog = [];
 const MAX_LOG_ENTRIES = 200;
 
-// --- BigInt serialization helper ---
-
-function serialize(data) {
-  return JSON.parse(JSON.stringify(data, (_, v) =>
-    typeof v === 'bigint' ? Number(v) : v
-  ));
-}
-
 // --- Middleware ---
 
 app.set('trust proxy', 1);
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '512kb' }));
+app.use(express.urlencoded({ extended: true, limit: '512kb' }));
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// CSRF origin check on state-changing requests
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+    const origin = req.get('origin');
+    const host = req.get('host');
+    if (origin && !origin.includes(host)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+  }
+  next();
+});
 
 app.use(session({
   secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
@@ -104,13 +149,15 @@ app.use((req, res, next) => {
 
 // --- Auth routes (public) ---
 
-app.post('/auth/login', async (req, res) => {
+app.post('/auth/login', (req, res) => {
+  if (!checkLoginRate(req.ip)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  }
   const { username, password } = req.body;
   if (username !== ADMIN_USER) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-  const valid = await verifyAdminPassword(password);
-  if (valid) {
+  if (verifyAdminPassword(password)) {
     req.session.authenticated = true;
     return res.json({ ok: true });
   }
@@ -128,7 +175,7 @@ app.get('/auth/check', (req, res) => {
   res.json({ authenticated: !!req.session.authenticated });
 });
 
-app.post('/auth/change-password', async (req, res) => {
+app.post('/auth/change-password', (req, res) => {
   if (!req.session.authenticated) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -139,19 +186,13 @@ app.post('/auth/change-password', async (req, res) => {
   if (newPassword.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters' });
   }
-  const valid = await verifyAdminPassword(currentPassword);
-  if (!valid) {
+  if (newPassword.length > 128) {
+    return res.status(400).json({ error: 'Password too long' });
+  }
+  if (!verifyAdminPassword(currentPassword)) {
     return res.status(401).json({ error: 'Current password is incorrect' });
   }
-  try {
-    await prisma.setting.upsert({
-      where: { key: 'admin_password_hash' },
-      update: { value: hashPassword(newPassword) },
-      create: { key: 'admin_password_hash', value: hashPassword(newPassword) },
-    });
-  } catch {
-    return res.status(500).json({ error: 'Failed to save. Run: npx prisma migrate dev' });
-  }
+  adminPasswordHash = hashPassword(newPassword);
   res.json({ ok: true });
 });
 
@@ -171,6 +212,7 @@ app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
 
 // Public routes (no auth required)
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
 app.use('/landing.html', express.static(path.join(__dirname, 'public', 'landing.html')));
 
@@ -181,47 +223,44 @@ app.get('/chat/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 
 // --- Dead Drop (anonymous paste bin) ---
 
-const PASTE_MAX_SIZE = 256 * 1024; // 256 KB
-const PASTE_EXPIRY_OPTIONS = {
-  '1h': 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-};
-
 app.get('/drop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
 app.get('/drop/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
 
-app.post('/api/drop', async (req, res) => {
+app.post('/api/drop', (req, res) => {
   const { encrypted, iv, burn, expiry } = req.body;
-  if (!encrypted || !iv) {
+  if (!encrypted || !iv || typeof encrypted !== 'string' || typeof iv !== 'string') {
     return res.status(400).json({ error: 'Missing encrypted data' });
+  }
+  if (iv.length > 24) {
+    return res.status(400).json({ error: 'Invalid IV' });
   }
   if (encrypted.length > PASTE_MAX_SIZE) {
     return res.status(413).json({ error: 'Paste too large (256 KB max)' });
   }
+  if (pastes.size >= PASTE_MAX_COUNT) {
+    return res.status(503).json({ error: 'Server at capacity. Try again later.' });
+  }
   const ttl = PASTE_EXPIRY_OPTIONS[expiry] || PASTE_EXPIRY_OPTIONS['24h'];
-  const paste = await prisma.paste.create({
-    data: {
-      encrypted,
-      iv,
-      burnAfterRead: !!burn,
-      expiresAt: new Date(Date.now() + ttl),
-    },
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  pastes.set(id, {
+    encrypted,
+    iv,
+    burnAfterRead: !!burn,
+    expiresAt: now + ttl,
+    createdAt: now,
   });
-  res.status(201).json({ id: paste.id });
+  res.status(201).json({ id });
 });
 
-app.get('/api/drop/:id', async (req, res) => {
-  const paste = await prisma.paste.findUnique({
-    where: { id: req.params.id },
-  });
-  if (!paste || paste.expiresAt < new Date()) {
-    if (paste) await prisma.paste.delete({ where: { id: paste.id } }).catch(() => {});
+app.get('/api/drop/:id', (req, res) => {
+  const paste = pastes.get(req.params.id);
+  if (!paste || paste.expiresAt <= Date.now()) {
+    if (paste) pastes.delete(req.params.id);
     return res.status(404).json({ error: 'Paste not found or expired' });
   }
   if (paste.burnAfterRead) {
-    await prisma.paste.delete({ where: { id: paste.id } }).catch(() => {});
+    pastes.delete(req.params.id);
   }
   res.json({ encrypted: paste.encrypted, iv: paste.iv, burn: paste.burnAfterRead });
 });
@@ -232,177 +271,37 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API: Status ---
 
-app.get('/api/status', async (req, res) => {
-  const userCount = await prisma.user.count();
+app.get('/api/status', (req, res) => {
   res.json({
     status: 'running',
     uptime: Math.floor((Date.now() - startedAt.getTime()) / 1000),
     startedAt: startedAt.toISOString(),
     nodeVersion: process.version,
     memoryUsage: Math.round(process.memoryUsage().rss / 1024 / 1024),
-    userCount,
   });
-});
-
-// --- API: Users ---
-
-app.get('/api/users', async (req, res) => {
-  const users = await prisma.user.findMany();
-  res.json(users);
-});
-
-app.get('/api/users/:id', async (req, res) => {
-  const user = await prisma.user.findUnique({
-    where: { id: Number(req.params.id) },
-  });
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
-});
-
-app.post('/api/users', async (req, res) => {
-  const { email, name } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email is required' });
-  try {
-    const user = await prisma.user.create({ data: { email, name } });
-    res.status(201).json(user);
-  } catch (err) {
-    if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'Email already exists' });
-    }
-    throw err;
-  }
-});
-
-app.put('/api/users/:id', async (req, res) => {
-  const { email, name } = req.body;
-  try {
-    const user = await prisma.user.update({
-      where: { id: Number(req.params.id) },
-      data: { email, name },
-    });
-    res.json(user);
-  } catch (err) {
-    if (err.code === 'P2025') {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    throw err;
-  }
-});
-
-app.delete('/api/users/:id', async (req, res) => {
-  try {
-    await prisma.user.delete({
-      where: { id: Number(req.params.id) },
-    });
-    res.status(204).end();
-  } catch (err) {
-    if (err.code === 'P2025') {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    throw err;
-  }
-});
-
-// --- API: Database ---
-
-app.get('/api/db/info', async (req, res) => {
-  try {
-    const [info] = await prisma.$queryRaw`
-      SELECT current_database() as database,
-             current_user as "user",
-             version() as version`;
-    const [size] = await prisma.$queryRaw`
-      SELECT pg_size_pretty(pg_database_size(current_database())) as size`;
-    res.json({ ...info, size: size.size });
-  } catch {
-    res.status(500).json({ error: 'Database connection failed' });
-  }
-});
-
-app.get('/api/db/tables', async (req, res) => {
-  const tables = await prisma.$queryRaw`
-    SELECT t.tablename as name,
-           s.n_live_tup as row_count
-    FROM pg_tables t
-    LEFT JOIN pg_stat_user_tables s ON s.relname = t.tablename
-    WHERE t.schemaname = 'public'
-    ORDER BY t.tablename`;
-  res.json(serialize(tables));
-});
-
-app.get('/api/db/tables/:name', async (req, res) => {
-  const { name } = req.params;
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 25));
-  const offset = (page - 1) * limit;
-
-  // Validate table name against actual DB tables
-  const tables = await prisma.$queryRaw`
-    SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
-  if (!tables.some(t => t.tablename === name)) {
-    return res.status(404).json({ error: 'Table not found' });
-  }
-
-  const columns = await prisma.$queryRaw`
-    SELECT column_name, data_type, is_nullable, column_default
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = ${name}
-    ORDER BY ordinal_position`;
-
-  const [countResult] = await prisma.$queryRawUnsafe(
-    `SELECT count(*)::integer as total FROM "${name}"`
-  );
-
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT * FROM "${name}" ORDER BY 1 DESC LIMIT $1 OFFSET $2`,
-    limit, offset
-  );
-
-  res.json(serialize({
-    name,
-    columns,
-    total: countResult.total,
-    page,
-    limit,
-    pages: Math.ceil(countResult.total / limit),
-    rows,
-  }));
-});
-
-app.get('/api/db/migrations', async (req, res) => {
-  try {
-    const migrations = await prisma.$queryRaw`
-      SELECT migration_name, started_at, finished_at, applied_steps_count
-      FROM "_prisma_migrations"
-      ORDER BY started_at DESC`;
-    res.json(serialize(migrations));
-  } catch {
-    res.json([]);
-  }
 });
 
 // --- API: System ---
 
 app.get('/api/system', (req, res) => {
-  const sensitiveKeys = ['PASSWORD', 'SECRET', 'TOKEN', 'KEY', 'DATABASE_URL'];
+  const ALLOWED_ENV = ['NODE_ENV', 'PORT', 'ADMIN_USERNAME'];
   const env = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('npm_') || key.startsWith('__') || key === 'PATH' || key === 'HOME') continue;
-    const sensitive = sensitiveKeys.some(s => key.toUpperCase().includes(s));
-    env[key] = sensitive ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : value;
+  for (const key of ALLOWED_ENV) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  // Show existence of secrets without values
+  for (const key of ['SESSION_SECRET', 'ADMIN_PASSWORD']) {
+    env[key] = process.env[key] ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '(not set)';
   }
   res.json({
-    pid: process.pid,
     nodeVersion: process.version,
     platform: `${os.type()} ${os.release()}`,
     arch: os.arch(),
-    hostname: os.hostname(),
     cpus: os.cpus().length,
     totalMemory: Math.round(os.totalmem() / 1024 / 1024),
     freeMemory: Math.round(os.freemem() / 1024 / 1024),
     processMemory: Math.round(process.memoryUsage().rss / 1024 / 1024),
     uptime: Math.floor(process.uptime()),
-    cwd: process.cwd(),
     env,
   });
 });
@@ -415,40 +314,50 @@ app.get('/api/logs', (req, res) => {
 
 // --- API: Drops (admin) ---
 
-app.get('/api/drops', async (req, res) => {
-  const drops = await prisma.paste.findMany({
-    select: { id: true, burnAfterRead: true, expiresAt: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  });
-  const now = new Date();
-  res.json(drops.map(d => ({
-    ...d,
-    expired: d.expiresAt < now,
-    size: undefined,
-  })));
-});
-
-app.get('/api/drops/stats', async (req, res) => {
-  const total = await prisma.paste.count();
-  const active = await prisma.paste.count({ where: { expiresAt: { gt: new Date() } } });
-  const burnCount = await prisma.paste.count({ where: { burnAfterRead: true, expiresAt: { gt: new Date() } } });
-  res.json({ total, active, expired: total - active, burn: burnCount });
-});
-
-app.delete('/api/drops/:id', async (req, res) => {
-  try {
-    await prisma.paste.delete({ where: { id: req.params.id } });
-    res.status(204).end();
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Drop not found' });
-    throw err;
+app.get('/api/drops', (req, res) => {
+  const now = Date.now();
+  const drops = [];
+  for (const [id, p] of pastes) {
+    drops.push({
+      id,
+      burnAfterRead: p.burnAfterRead,
+      expiresAt: new Date(p.expiresAt).toISOString(),
+      createdAt: new Date(p.createdAt).toISOString(),
+      expired: p.expiresAt <= now,
+    });
   }
+  drops.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(drops.slice(0, 100));
 });
 
-app.post('/api/drops/purge-expired', async (req, res) => {
-  const { count } = await prisma.paste.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-  res.json({ purged: count });
+app.get('/api/drops/stats', (req, res) => {
+  const now = Date.now();
+  let total = 0, active = 0, burn = 0;
+  for (const p of pastes.values()) {
+    total++;
+    if (p.expiresAt > now) {
+      active++;
+      if (p.burnAfterRead) burn++;
+    }
+  }
+  res.json({ total, active, expired: total - active, burn });
+});
+
+app.delete('/api/drops/:id', (req, res) => {
+  if (!pastes.has(req.params.id)) {
+    return res.status(404).json({ error: 'Drop not found' });
+  }
+  pastes.delete(req.params.id);
+  res.status(204).end();
+});
+
+app.post('/api/drops/purge-expired', (req, res) => {
+  const now = Date.now();
+  let purged = 0;
+  for (const [id, p] of pastes) {
+    if (p.expiresAt <= now) { pastes.delete(id); purged++; }
+  }
+  res.json({ purged });
 });
 
 // --- API: Chat stats (admin) ---
@@ -481,6 +390,15 @@ const ipConnections = new Map(); // ip -> count
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MSG_SIZE });
 
+// Determine allowed WebSocket origins
+const ALLOWED_WS_ORIGINS = new Set([
+  `http://localhost:${PORT}`,
+  'https://server-express-u3tu.onrender.com',
+]);
+if (process.env.RENDER_EXTERNAL_URL) {
+  ALLOWED_WS_ORIGINS.add(process.env.RENDER_EXTERNAL_URL);
+}
+
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
   const match = url.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
@@ -489,6 +407,13 @@ server.on('upgrade', (request, socket, head) => {
     return;
   }
   const roomId = match[1];
+
+  // Origin validation
+  const origin = request.headers.origin;
+  if (origin && !ALLOWED_WS_ORIGINS.has(origin)) {
+    socket.destroy();
+    return;
+  }
 
   // Global connection limit
   if (wss.clients.size >= MAX_TOTAL_CONNECTIONS) {
@@ -609,3 +534,10 @@ const heartbeat = setInterval(() => {
     ws.ping();
   });
 }, 30000);
+
+// Periodic cleanup of stale IP connection entries
+setInterval(() => {
+  for (const [ip, count] of ipConnections) {
+    if (count <= 0) ipConnections.delete(ip);
+  }
+}, 60000);

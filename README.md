@@ -1,6 +1,6 @@
 # server-express
 
-Self-hosted tools platform with an admin control panel. Built with Node.js, Express, Prisma, and PostgreSQL. Deployed on Render.
+Self-hosted tools platform with an admin control panel. Built with Node.js and Express. Fully in-memory — no database. Deployed on Render.
 
 ## Tools
 
@@ -13,19 +13,29 @@ Zero-knowledge encrypted paste bin at `/drop`. Designed for sharing sensitive te
 - **Burn after reading** — optionally destroy the message after one view
 - **Auto-expiry** — 1 hour, 24 hours, 7 days, or 30 days
 - **No traces** — no logging, no IP tracking, no cookies, no metadata on drop routes
+- **In-memory storage** — drops are never written to disk, lost on restart
 - **256 KB max** per paste
 
-The server stores only ciphertext. It cannot read drop contents even if compromised.
+The server stores only ciphertext in memory. It cannot read drop contents even if compromised.
+
+### Signal Room
+
+Zero-knowledge encrypted ephemeral chat at `/chat`. Real-time messaging where the server is a dumb relay.
+
+- **Client-side AES-256-GCM encryption** — messages encrypted in browser before transmission
+- **Key in URL fragment** — decryption key never leaves your URL bar
+- **WebSocket relay** — server forwards opaque ciphertext, cannot decrypt anything
+- **Fully ephemeral** — no messages stored anywhere (not even in memory)
+- **No traces** — no logging, no IP tracking, no metadata on chat routes
+- **Rooms auto-destroy** when the last participant disconnects
 
 ## Admin Panel
 
 Authenticated control panel at `/panel` (login at `/login.html`).
 
 **Tabs:**
-- **Dashboard** — uptime, memory, user count, active drops, request log
+- **Dashboard** — uptime, memory, active drops, chat rooms/peers, request log
 - **Drops** — view/delete encrypted drops, purge expired, stats
-- **Users** — CRUD for application users
-- **Database** — browse tables, view schemas, inspect data, migration history
 - **Settings** — change password, environment variables, system info
 
 ## Local Development
@@ -33,14 +43,12 @@ Authenticated control panel at `/panel` (login at `/login.html`).
 ### Prerequisites
 
 - Node.js >= 18
-- PostgreSQL running locally
 
 ### Setup
 
 ```bash
 npm install
-cp .env.example .env    # fill in DATABASE_URL, ADMIN_PASSWORD
-npx prisma migrate dev
+cp .env.example .env    # fill in ADMIN_PASSWORD
 npm run dev
 ```
 
@@ -51,14 +59,26 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3000` | Server port |
-| `DATABASE_URL` | — | PostgreSQL connection string |
 | `ADMIN_USERNAME` | `admin` | Admin login username |
 | `ADMIN_PASSWORD` | — | **Required.** Admin login password |
 | `SESSION_SECRET` | random | Session cookie signing secret (set in production) |
 
+## Security
+
+- **Login rate limiting** — 5 attempts per IP per minute
+- **CSRF origin checking** on all state-changing requests
+- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, HSTS in production
+- **WebSocket origin validation** — only allowed origins can connect
+- **scrypt password hashing** with random salt (env var password hashed at startup)
+- **Timing-safe comparison** (prevents timing attacks)
+- **httpOnly, sameSite lax, secure cookies**
+- **Connection limits** — per-IP (10), global (500), per-room (50), max rooms (1000)
+- **Rate limiting** — 10 WebSocket messages/sec per connection
+- **Allowlist-based env var exposure** in system info API
+
 ## API
 
-All `/api/*` endpoints require authentication except `/api/drop` (public).
+All `/api/*` endpoints require authentication except `/api/drop` and `/api/chat` (public).
 
 ### Public (no auth)
 
@@ -81,53 +101,33 @@ All `/api/*` endpoints require authentication except `/api/drop` (public).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/status` | Server health |
-| `GET` | `/api/users` | List users |
-| `POST` | `/api/users` | Create user (`{ email, name? }`) |
-| `PUT` | `/api/users/:id` | Update user |
-| `DELETE` | `/api/users/:id` | Delete user |
 | `GET` | `/api/drops` | List all drops (metadata only) |
 | `GET` | `/api/drops/stats` | Drop statistics |
 | `DELETE` | `/api/drops/:id` | Delete a drop |
 | `POST` | `/api/drops/purge-expired` | Delete all expired drops |
-| `GET` | `/api/db/info` | Database info |
-| `GET` | `/api/db/tables` | List tables |
-| `GET` | `/api/db/tables/:name` | Table data (`?page=1&limit=25`) |
-| `GET` | `/api/db/migrations` | Migration history |
-| `GET` | `/api/system` | System info + env vars |
+| `GET` | `/api/chat/stats` | Chat room/peer counts |
+| `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |
 
 ## Project Structure
 
 ```
 src/
-  server.js              # Express app, all routes
-  lib/
-    prisma.js            # Shared Prisma client
+  server.js              # Express app, all routes, WebSocket relay
   public/
     landing.html         # Tools index (/)
     drop.html            # Dead Drop UI (/drop)
+    chat.html            # Signal Room UI (/chat)
     index.html           # Admin panel (/panel)
     login.html           # Login page
-prisma/
-  schema.prisma          # Database schema (User, Setting, Paste)
-  migrations/            # SQL migrations
 ```
-
-## Database
-
-Prisma 7 with PostgreSQL driver adapter. Models:
-
-- **User** — email, name, timestamps
-- **Setting** — key-value store (admin password hash)
-- **Paste** — encrypted content, IV, burn flag, expiry timestamp
 
 ## Deploying to Render
 
 1. Push to GitHub
-2. Create a PostgreSQL database on Render
-3. Create a Web Service, connect the repo
-4. Set `DATABASE_URL` (Internal Database URL), `ADMIN_PASSWORD`, `SESSION_SECRET` in Environment
-5. Build command: `npm install && npx prisma generate && npx prisma migrate deploy`
-6. Start command: `npm start`
+2. Create a Web Service, connect the repo
+3. Set `ADMIN_PASSWORD`, `SESSION_SECRET` in Environment
+4. Build command: `npm install`
+5. Start command: `npm start`
 
-Auto-deploys on push.
+No database required. Auto-deploys on push.
