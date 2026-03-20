@@ -286,7 +286,13 @@
       letter-spacing: 1px;
     }
 
-    .hidden { display: none; }
+    .hidden { display: none !important; }
+
+    #chatView {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
 
     @media (max-width: 500px) {
       .messages { max-height: 400px; min-height: 200px; }
@@ -345,7 +351,7 @@
     </div>
 
     <!-- CHAT VIEW -->
-    <div id="chatView" class="hidden" style="flex:1;display:flex;flex-direction:column;">
+    <div id="chatView" class="hidden">
       <div class="room-header">
         <div>
           <span class="room-id">room: <code id="roomIdDisplay"></code></span>
@@ -474,7 +480,6 @@
     function showError(title, desc) {
       createView.classList.add('hidden');
       chatView.classList.add('hidden');
-      chatView.style.display = 'none';
       document.getElementById('errorTitle').textContent = title;
       document.getElementById('errorDesc').textContent = desc;
       errorView.style.display = 'block';
@@ -525,7 +530,6 @@
 
       createView.classList.add('hidden');
       chatView.classList.remove('hidden');
-      chatView.style.display = 'flex';
       document.getElementById('roomIdDisplay').textContent = roomId;
 
       // Copy link button
