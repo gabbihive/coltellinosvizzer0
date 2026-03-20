@@ -19,22 +19,33 @@ if (!ADMIN_PASS) {
   process.exit(1);
 }
 
+if (ADMIN_PASS.length < 12) {
+  console.error('ADMIN_PASSWORD must be at least 12 characters.');
+  process.exit(1);
+}
+
 if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('SESSION_SECRET env var is required in production.');
+    process.exit(1);
+  }
   console.warn('WARNING: SESSION_SECRET not set. Sessions will not survive restarts.');
 }
 
 // --- Password hashing (scrypt, no external deps) ---
 
+const SCRYPT_OPTS = { N: 16384, r: 8, p: 1, maxmem: 128 * 1024 * 1024 };
+
 const initialPasswordHash = (() => {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(ADMIN_PASS, salt, 64).toString('hex');
+  const hash = crypto.scryptSync(ADMIN_PASS, salt, 64, SCRYPT_OPTS).toString('hex');
   return `${salt}:${hash}`;
 })();
 let adminPasswordHash = null; // in-memory override (resets on restart)
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64, SCRYPT_OPTS).toString('hex');
   return `${salt}:${hash}`;
 }
 
@@ -42,7 +53,7 @@ function verifyHashedPassword(password, stored) {
   const parts = stored.split(':');
   if (parts.length !== 2) return false;
   const [salt, storedHash] = parts;
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64, SCRYPT_OPTS).toString('hex');
   if (hash.length !== storedHash.length) return false;
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(storedHash));
 }
@@ -62,6 +73,19 @@ function checkLoginRate(ip) {
   if (attempt.count >= 5) return false;
   attempt.count++;
   loginAttempts.set(ip, attempt);
+  return true;
+}
+
+// --- Retrieval rate limiting ---
+
+const retrievalAttempts = new Map(); // ip -> { count, resetAt }
+function checkRetrievalRate(ip) {
+  const now = Date.now();
+  const attempt = retrievalAttempts.get(ip) || { count: 0, resetAt: now + 60000 };
+  if (now > attempt.resetAt) { attempt.count = 0; attempt.resetAt = now + 60000; }
+  if (attempt.count >= 60) return false;
+  attempt.count++;
+  retrievalAttempts.set(ip, attempt);
   return true;
 }
 
@@ -120,6 +144,23 @@ function checkUploadRate(ip) {
   if (attempt.count >= 20) return false;
   attempt.count++;
   uploadAttempts.set(ip, attempt);
+  return true;
+}
+
+// --- Registered chat rooms (access control + invite tokens) ---
+
+const registeredRooms = new Map(); // roomId -> { accessTokenHash, invites, createdAt, expiresAt }
+const ROOM_MAX_LIFETIME = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_ROOMS = 1000;
+
+const roomCreateAttempts = new Map();
+function checkRoomCreateRate(ip) {
+  const now = Date.now();
+  const attempt = roomCreateAttempts.get(ip) || { count: 0, resetAt: now + 3600000 };
+  if (now > attempt.resetAt) { attempt.count = 0; attempt.resetAt = now + 3600000; }
+  if (attempt.count >= 10) return false;
+  attempt.count++;
+  roomCreateAttempts.set(ip, attempt);
   return true;
 }
 
@@ -205,19 +246,23 @@ app.use((req, res, next) => {
 });
 
 // CSRF origin check on state-changing requests
+const CSRF_EXEMPT_PATHS = new Set(['/api/drop', '/api/file', '/api/chat/room']);
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.get('origin');
     const referer = req.get('referer');
     const host = req.get('host');
-    // Extract hostname from origin or referer
     let sourceHost = null;
     try {
       if (origin) sourceHost = new URL(origin).host;
       else if (referer) sourceHost = new URL(referer).host;
     } catch {}
-    // Block if we can determine a cross-origin source
+    // Block cross-origin requests
     if (sourceHost && sourceHost !== host) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    // Deny missing origin on authenticated endpoints (CSRF defense-in-depth)
+    if (!sourceHost && !CSRF_EXEMPT_PATHS.has(req.path)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
   }
@@ -255,12 +300,17 @@ app.use((req, res, next) => {
 
 // --- Auth routes (public) ---
 
+// Dummy hash for timing-safe username validation
+const DUMMY_HASH = hashPassword('dummy-timing-equalization');
+
 app.post('/auth/login', (req, res) => {
   if (!checkLoginRate(req.ip)) {
     return res.status(429).json({ error: 'Too many attempts. Try again later.' });
   }
   const { username, password } = req.body;
   if (username !== ADMIN_USER) {
+    // Run dummy scrypt to equalize timing with valid-username path
+    verifyHashedPassword(password || '', DUMMY_HASH);
     return res.status(401).json({ error: 'Invalid credentials' });
   }
   if (verifyAdminPassword(password)) {
@@ -313,7 +363,7 @@ function requireAuth(req, res, next) {
 }
 
 app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
-  serveWithCSP('index', req, res);
+  serveWithCSP('index', req, res, { noCache: true, isolate: true });
 }));
 
 // Public routes (no auth required)
@@ -326,6 +376,49 @@ app.get('/landing.html', (req, res) => serveWithCSP('landing', req, res));
 
 app.get('/chat', (req, res) => serveWithCSP('chat', req, res, { noCache: true, isolate: true, wss: true }));
 app.get('/chat/:id', (req, res) => serveWithCSP('chat', req, res, { noCache: true, isolate: true, wss: true }));
+
+// Room creation API (public — no auth required)
+app.post('/api/chat/room', (req, res) => {
+  if (!checkRoomCreateRate(req.ip)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+  const { roomId, accessTokenHash, inviteTokenHashes } = req.body;
+  if (!roomId || !accessTokenHash || !inviteTokenHashes) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  if (typeof roomId !== 'string' || !/^[a-zA-Z0-9]{16}$/.test(roomId)) {
+    return res.status(400).json({ error: 'Invalid room ID' });
+  }
+  if (typeof accessTokenHash !== 'string' || !/^[a-f0-9]{64}$/.test(accessTokenHash)) {
+    return res.status(400).json({ error: 'Invalid access token' });
+  }
+  if (!Array.isArray(inviteTokenHashes) || inviteTokenHashes.length < 2 || inviteTokenHashes.length > 50) {
+    return res.status(400).json({ error: 'Invite tokens required (2-50)' });
+  }
+  for (const h of inviteTokenHashes) {
+    if (typeof h !== 'string' || !/^[a-f0-9]{64}$/.test(h)) {
+      return res.status(400).json({ error: 'Invalid invite token hash' });
+    }
+  }
+  if (registeredRooms.has(roomId)) {
+    return res.status(409).json({ error: 'Room exists' });
+  }
+  if (registeredRooms.size >= MAX_ROOMS) {
+    return res.status(503).json({ error: 'Server at capacity' });
+  }
+  const now = Date.now();
+  const invites = new Map();
+  for (const h of inviteTokenHashes) {
+    invites.set(h, { active: false, peerId: null });
+  }
+  registeredRooms.set(roomId, {
+    accessTokenHash,
+    invites,
+    createdAt: now,
+    expiresAt: now + ROOM_MAX_LIFETIME,
+  });
+  res.status(201).json({ ok: true, expiresAt: now + ROOM_MAX_LIFETIME });
+});
 
 // --- Dead Drop (anonymous paste bin) ---
 
@@ -360,6 +453,7 @@ app.post('/api/drop', (req, res) => {
 });
 
 app.get('/api/drop/:id', (req, res) => {
+  if (!checkRetrievalRate(req.ip)) return res.status(429).json({ error: 'Rate limit exceeded' });
   if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
   const paste = pastes.get(req.params.id);
   if (!paste || paste.expiresAt <= Date.now()) {
@@ -420,6 +514,7 @@ app.post('/api/file', (req, res) => {
 });
 
 app.get('/api/file/:id', (req, res) => {
+  if (!checkRetrievalRate(req.ip)) return res.status(429).json({ error: 'Rate limit exceeded' });
   if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
   const file = fileStore.get(req.params.id);
   if (!file || file.expiresAt <= Date.now()) {
@@ -600,7 +695,63 @@ const chatRooms = new Map(); // roomId -> Set<ws>
 app.get('/api/chat/stats', (req, res) => {
   let totalClients = 0;
   for (const clients of chatRooms.values()) totalClients += clients.size;
-  res.json({ rooms: chatRooms.size, clients: totalClients });
+  res.json({ rooms: chatRooms.size, clients: totalClients, registered: registeredRooms.size });
+});
+
+// --- API: Rooms (admin) ---
+
+app.get('/api/chat/rooms', (req, res) => {
+  const now = Date.now();
+  const rooms = [];
+  for (const [id, config] of registeredRooms) {
+    const clients = chatRooms.get(id);
+    rooms.push({
+      id,
+      createdAt: new Date(config.createdAt).toISOString(),
+      expiresAt: new Date(config.expiresAt).toISOString(),
+      expired: config.expiresAt <= now,
+      invitesRemaining: config.invites.size,
+      connected: clients ? clients.size : 0,
+    });
+  }
+  rooms.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(rooms);
+});
+
+app.delete('/api/chat/rooms/:id', (req, res) => {
+  const roomId = req.params.id;
+  if (!/^[a-zA-Z0-9]{16}$/.test(roomId)) return res.status(400).json({ error: 'Invalid room ID' });
+  const config = registeredRooms.get(roomId);
+  if (!config) return res.status(404).json({ error: 'Room not found' });
+  const room = chatRooms.get(roomId);
+  if (room) {
+    const msg = JSON.stringify({ type: 'expired' });
+    for (const ws of room) {
+      try { ws.send(msg); } catch {}
+      try { ws.close(1000, 'Room terminated'); } catch {}
+    }
+    chatRooms.delete(roomId);
+  }
+  registeredRooms.delete(roomId);
+  res.status(204).end();
+});
+
+app.post('/api/chat/rooms/purge', (req, res) => {
+  let count = 0;
+  for (const [roomId] of registeredRooms) {
+    const room = chatRooms.get(roomId);
+    if (room) {
+      const msg = JSON.stringify({ type: 'expired' });
+      for (const ws of room) {
+        try { ws.send(msg); } catch {}
+        try { ws.close(1000, 'Rooms purged'); } catch {}
+      }
+      chatRooms.delete(roomId);
+    }
+    count++;
+  }
+  registeredRooms.clear();
+  res.json({ purged: count });
 });
 
 // --- 404 and error handlers ---
@@ -628,7 +779,6 @@ const { WebSocketServer } = require('ws');
 
 const MAX_MSG_SIZE = 65536; // 64 KB
 const MAX_ROOM_SIZE = 50;
-const MAX_ROOMS = 1000;
 const MAX_CONNECTIONS_PER_IP = 10;
 const MAX_TOTAL_CONNECTIONS = 500;
 const RATE_LIMIT = 10; // messages per second
@@ -654,9 +804,9 @@ server.on('upgrade', (request, socket, head) => {
   }
   const roomId = match[1];
 
-  // Origin validation
+  // Origin validation (required — reject missing origin)
   const origin = request.headers.origin;
-  if (origin && !ALLOWED_WS_ORIGINS.has(origin)) {
+  if (!origin || !ALLOWED_WS_ORIGINS.has(origin)) {
     socket.destroy();
     return;
   }
@@ -675,9 +825,47 @@ server.on('upgrade', (request, socket, head) => {
     return;
   }
 
-  // Room count limit (only for new rooms)
-  if (!chatRooms.has(roomId) && chatRooms.size >= MAX_ROOMS) {
+  // Room must be registered
+  const roomConfig = registeredRooms.get(roomId);
+  if (!roomConfig) {
     socket.destroy();
+    return;
+  }
+
+  // Check room expiry
+  if (Date.now() > roomConfig.expiresAt) {
+    registeredRooms.delete(roomId);
+    socket.destroy();
+    return;
+  }
+
+  // Verify access token (HKDF-derived, proves key possession)
+  const accessToken = url.searchParams.get('access');
+  if (!accessToken || typeof accessToken !== 'string' || !/^[a-f0-9]{64}$/.test(accessToken)) {
+    socket.destroy();
+    return;
+  }
+  const accessHash = crypto.createHash('sha256').update(accessToken).digest('hex');
+  if (accessHash.length !== roomConfig.accessTokenHash.length ||
+      !crypto.timingSafeEqual(Buffer.from(accessHash), Buffer.from(roomConfig.accessTokenHash))) {
+    socket.destroy();
+    return;
+  }
+
+  // Verify and claim invite token (one concurrent connection per token)
+  const inviteToken = url.searchParams.get('invite');
+  if (!inviteToken || typeof inviteToken !== 'string' || !/^[a-f0-9]{32}$/.test(inviteToken)) {
+    socket.destroy();
+    return;
+  }
+  const inviteHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
+  const invite = roomConfig.invites.get(inviteHash);
+  if (!invite) {
+    socket.destroy();
+    return;
+  }
+  if (invite.active) {
+    socket.destroy(); // Token already in use by another connection
     return;
   }
 
@@ -688,15 +876,16 @@ server.on('upgrade', (request, socket, head) => {
     return;
   }
 
-  // Track IP
+  // Claim invite token and track IP
+  invite.active = true;
   ipConnections.set(ip, ipCount + 1);
 
   wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, roomId, ip);
+    wss.emit('connection', ws, roomId, ip, inviteHash, roomConfig.expiresAt);
   });
 });
 
-wss.on('connection', (ws, roomId, ip) => {
+wss.on('connection', (ws, roomId, ip, inviteHash, expiresAt) => {
   // Assign anonymous peer ID
   const peerId = crypto.randomBytes(2).toString('hex');
 
@@ -709,8 +898,8 @@ wss.on('connection', (ws, roomId, ip) => {
   let msgCount = 0;
   const rateLimitInterval = setInterval(() => { msgCount = 0; }, 1000);
 
-  // Send init to joining peer
-  ws.send(JSON.stringify({ type: 'init', peer: peerId, count: room.size }));
+  // Send init to joining peer (include room expiry for client countdown)
+  ws.send(JSON.stringify({ type: 'init', peer: peerId, count: room.size, expiresAt }));
 
   // Broadcast join to others
   for (const peer of room) {
@@ -755,6 +944,12 @@ wss.on('connection', (ws, roomId, ip) => {
     if (count <= 1) ipConnections.delete(ip);
     else ipConnections.set(ip, count - 1);
 
+    // Consume invite token permanently (one-time use)
+    const roomConfig = registeredRooms.get(roomId);
+    if (roomConfig) {
+      roomConfig.invites.delete(inviteHash);
+    }
+
     if (room.size === 0) {
       chatRooms.delete(roomId);
     } else {
@@ -787,3 +982,22 @@ setInterval(() => {
     if (count <= 0) ipConnections.delete(ip);
   }
 }, 60000);
+
+// Periodic cleanup of expired rooms
+setInterval(() => {
+  const now = Date.now();
+  for (const [roomId, config] of registeredRooms) {
+    if (now > config.expiresAt) {
+      registeredRooms.delete(roomId);
+      const room = chatRooms.get(roomId);
+      if (room) {
+        const expMsg = JSON.stringify({ type: 'expired' });
+        for (const ws of room) {
+          try { ws.send(expMsg); } catch {}
+          try { ws.close(1000, 'Room expired'); } catch {}
+        }
+        chatRooms.delete(roomId);
+      }
+    }
+  }
+}, 30000);

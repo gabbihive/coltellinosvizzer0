@@ -58,6 +58,14 @@
 
     .notice strong { color: #6abf6a; }
 
+    .notice.warn {
+      background: #1a1710;
+      border-color: #33291a;
+      color: #8c7a4a;
+    }
+
+    .notice.warn strong { color: #bfa86a; }
+
     .btn {
       padding: 10px 24px;
       background: #1a1a1a;
@@ -83,6 +91,14 @@
 
     .btn-primary:hover { background: #143014; color: #6abf6a; }
 
+    .btn-danger {
+      background: #1a0d0d;
+      border-color: #331a1a;
+      color: #8c4a4a;
+    }
+
+    .btn-danger:hover { background: #301414; color: #bf6a6a; }
+
     .actions {
       display: flex;
       gap: 12px;
@@ -90,30 +106,55 @@
       flex-wrap: wrap;
     }
 
-    .result-url {
+    .input-label {
+      display: block;
+      font-size: 11px;
+      color: #505050;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .text-input {
+      width: 100%;
+      padding: 10px 14px;
       background: #111;
       border: 1px solid #222;
       border-radius: 4px;
-      padding: 14px 16px;
-      font-size: 12px;
-      color: #6abf6a;
-      word-break: break-all;
-      cursor: pointer;
-      position: relative;
-      line-height: 1.5;
-      margin-top: 16px;
+      color: #d0d0d0;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
     }
 
-    .result-url:hover { border-color: #333; }
+    .text-input:focus { border-color: #333; }
+    .text-input::placeholder { color: #333; }
 
-    .result-url .copy-hint {
-      position: absolute;
-      top: 8px;
-      right: 12px;
-      font-size: 10px;
-      color: #444;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    .number-input {
+      width: 80px;
+      padding: 8px 12px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      color: #d0d0d0;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      text-align: center;
+    }
+
+    .number-input:focus { border-color: #333; }
+
+    .invite-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #707070;
     }
 
     /* Chat room */
@@ -121,7 +162,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       flex-wrap: wrap;
       gap: 8px;
     }
@@ -130,6 +171,12 @@
       font-size: 11px;
       color: #333;
       letter-spacing: 1px;
+    }
+
+    .room-timer {
+      font-size: 10px;
+      color: #505050;
+      margin-left: 8px;
     }
 
     .peer-count {
@@ -144,6 +191,56 @@
       background: #4a8c4a;
       border-radius: 50%;
       margin-right: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .header-btn {
+      padding: 5px 10px;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .verify-panel {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .verify-panel .fingerprint {
+      font-size: 15px;
+      color: #6abf6a;
+      letter-spacing: 3px;
+      margin: 10px 0;
+      text-align: center;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .verify-panel p {
+      color: #505050;
+      font-size: 10px;
+      line-height: 1.6;
+    }
+
+    .timeout-bar {
+      background: #1a1010;
+      border: 1px solid #331a1a;
+      color: #8c4a4a;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      text-align: center;
+      margin-bottom: 8px;
+      display: none;
     }
 
     .messages {
@@ -183,11 +280,22 @@
       color: #b0b0b0;
     }
 
+    .msg-meta {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
     .msg-peer {
       font-size: 10px;
       color: #505050;
-      margin-bottom: 2px;
       letter-spacing: 0.5px;
+    }
+
+    .msg-time {
+      font-size: 9px;
+      color: #383838;
     }
 
     .msg-system {
@@ -297,6 +405,8 @@
     @media (max-width: 500px) {
       .messages { max-height: 400px; min-height: 200px; }
       .msg { max-width: 90%; }
+      .header-actions { gap: 4px; }
+      .header-btn { padding: 4px 6px; font-size: 9px; }
     }
   </style>
 </head>
@@ -317,19 +427,48 @@
         Nothing is stored. Nothing is logged.
       </div>
 
-      <div class="actions">
-        <button class="btn btn-primary" id="createBtn">Create Room</button>
-        <a href="/" class="btn" style="text-decoration:none">Back</a>
+      <div id="createForm">
+        <label class="input-label" for="memberCount">Members (including you)</label>
+        <input type="number" id="memberCount" class="number-input" value="5" min="2" max="50">
+        <div class="actions">
+          <button class="btn btn-primary" id="createBtn">Create Room</button>
+          <a href="/" class="btn" style="text-decoration:none">Back</a>
+        </div>
       </div>
 
-      <div id="roomLink" class="hidden">
-        <div class="result-url" id="resultUrl" title="Click to copy">
-          <span class="copy-hint">click to copy</span>
-          <span id="resultUrlText"></span>
+      <div id="inviteResult" class="hidden">
+        <div class="notice warn">
+          <strong>Share each link with one member only.</strong> Each invite is single-use &mdash;
+          it cannot be reused by another person. The room self-destructs in 24 hours.
         </div>
-        <p style="margin-top:10px; font-size:11px; color:#505050;">
-          Share this link. Anyone with it can join and read messages. The room vanishes when everyone leaves.
-        </p>
+        <div id="inviteList"></div>
+        <div class="actions" style="margin-top:16px;">
+          <button class="btn btn-primary" id="enterRoomBtn">Enter Room</button>
+        </div>
+      </div>
+
+      <div id="rendezvousDiv" style="margin-top:32px;border-top:1px solid #181818;padding-top:24px;">
+        <div style="text-align:center;color:#333;font-size:10px;letter-spacing:2px;margin-bottom:20px;text-transform:uppercase;">Rendezvous</div>
+        <div class="notice">
+          <strong>Passphrase-based rendezvous.</strong> Enter a pre-agreed passphrase and sequence number.
+          All members with the same passphrase and sequence will arrive at the same encrypted room.
+          The server never sees the passphrase &mdash; all keys are derived locally. Nothing is stored.
+        </div>
+        <label class="input-label" for="passphrase">Shared passphrase</label>
+        <input type="password" id="passphrase" class="text-input" placeholder="Enter pre-agreed passphrase" autocomplete="off" spellcheck="false" style="margin-bottom:12px;">
+        <div style="display:flex;gap:12px;align-items:flex-end;">
+          <div>
+            <label class="input-label" for="seqNum">Sequence</label>
+            <input type="number" id="seqNum" class="number-input" value="1" min="1" max="9999">
+          </div>
+          <div>
+            <label class="input-label" for="rvMemberCount">Members</label>
+            <input type="number" id="rvMemberCount" class="number-input" value="5" min="2" max="16">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="rendezvousBtn">Rendezvous</button>
+        </div>
       </div>
 
       <div class="security-info">
@@ -337,16 +476,29 @@
           <summary>How it works</summary>
           <div class="detail">
             1. A random room ID and 256-bit <code>AES-GCM</code> key are generated in your browser<br>
-            2. The room ID is in the URL path &mdash; the server sees this (it's the room address)<br>
-            3. The encryption key is in the URL fragment (<code>#</code>) &mdash; browsers never transmit this<br>
-            4. Messages are encrypted client-side before being sent over WebSocket<br>
-            5. The server relays opaque ciphertext between participants &mdash; it cannot decrypt anything<br>
-            6. No messages are stored on the server &mdash; not in memory, not in a database<br>
-            7. No IP addresses, cookies, user agents, or metadata are logged for chat routes<br>
-            8. Rooms are destroyed the moment the last participant disconnects<br>
-            9. Even if the server is compromised, past messages cannot be recovered &mdash; they never existed on disk
+            2. One-time invite tokens are generated &mdash; each grants one person access<br>
+            3. An access token is derived from the encryption key via <code>HKDF</code> &mdash; only key-holders can connect<br>
+            4. The encryption key is in the URL fragment (<code>#</code>) &mdash; browsers never transmit this<br>
+            5. Messages are padded to fixed sizes and encrypted client-side before transmission<br>
+            6. The server relays opaque ciphertext &mdash; it cannot decrypt, determine message sizes, or identify participants<br>
+            7. No messages are stored on the server &mdash; not in memory, not in a database<br>
+            8. No IP addresses, cookies, user agents, or metadata are logged for chat routes<br>
+            9. Rooms self-destruct after 24 hours and when the last participant disconnects
           </div>
         </details>
+      </div>
+    </div>
+
+    <!-- CALLSIGN VIEW -->
+    <div id="callsignView" class="hidden">
+      <div class="notice warn">
+        <strong>Choose a callsign</strong> (optional). Use a pre-agreed alias that other members will recognize.
+        <strong>Do not</strong> use your real name, online handle, phone number, or anything that could identify you.
+        Agree on callsigns through a separate secure channel before joining.
+      </div>
+      <input type="text" id="callsignInput" class="text-input" maxlength="20" placeholder="Callsign (optional)" autocomplete="off" spellcheck="false">
+      <div class="actions">
+        <button class="btn btn-primary" id="joinBtn">Join</button>
       </div>
     </div>
 
@@ -355,12 +507,22 @@
       <div class="room-header">
         <div>
           <span class="room-id">room: <code id="roomIdDisplay"></code></span>
+          <span class="room-timer" id="roomTimer"></span>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span class="peer-count"><span class="dot"></span><span id="peerCount">0</span> connected</span>
-          <button class="btn" style="padding:6px 12px;font-size:10px;" id="copyLinkBtn">Copy link</button>
+        <div class="header-actions">
+          <span class="peer-count"><span class="dot"></span><span id="peerCount">0</span></span>
+          <button class="btn header-btn" id="verifyBtn">Verify</button>
+          <button class="btn btn-danger header-btn" id="purgeBtn">Purge</button>
         </div>
       </div>
+
+      <div class="verify-panel" id="verifyPanel">
+        <p>Compare this safety number with other members via a separate channel. If they match, you share the same encryption key.</p>
+        <div class="fingerprint" id="safetyNumber"></div>
+        <p>This number is derived from the room encryption key. A mismatch means someone has a different key.</p>
+      </div>
+
+      <div class="timeout-bar" id="timeoutBar"></div>
 
       <div class="messages" id="messages"></div>
 
@@ -373,9 +535,10 @@
         <details>
           <summary>How it works</summary>
           <div class="detail">
-            All messages are encrypted with <code>AES-256-GCM</code> in your browser before transmission.
-            The server relays ciphertext only. The key never leaves your URL bar.
+            All messages are padded to fixed sizes and encrypted with <code>AES-256-GCM</code> in your browser.
+            The server relays ciphertext only. The key never leaves your device.
             Messages are ephemeral &mdash; they are not stored anywhere. When you close this tab, they're gone.
+            The room self-destructs after 24 hours.
           </div>
         </details>
       </div>
@@ -412,11 +575,15 @@
     const _atob = atob;
     const _fromCharCode = String.fromCharCode;
     const _setTimeout = setTimeout;
+    const _setInterval = setInterval;
+    const _clearInterval = clearInterval;
     const _JSON_parse = JSON.parse;
     const _JSON_stringify = JSON.stringify;
     const _replaceState = _bind.call(history.replaceState, history);
     const _WebSocket = WebSocket;
     const _fetch = fetch;
+    const _Date_now = Date.now;
+    const _AudioContext = window.AudioContext || window.webkitAudioContext;
 
     function _assertNative(fn, name) {
       const s = _call.call(_toString, fn);
@@ -430,6 +597,8 @@
     _assertNative(crypto.subtle.decrypt, 'decrypt');
     _assertNative(crypto.subtle.importKey, 'importKey');
     _assertNative(crypto.subtle.exportKey, 'exportKey');
+    _assertNative(crypto.subtle.deriveBits, 'deriveBits');
+    _assertNative(crypto.subtle.digest, 'digest');
     _assertNative(crypto.getRandomValues, 'getRandomValues');
     _assertNative(_WebSocket, 'WebSocket');
     _assertNative(_fetch, 'fetch');
@@ -463,7 +632,7 @@
 
     function wipeBuffer(buf) {
       if (buf instanceof ArrayBuffer) new _Uint8Array(buf).fill(0);
-      else if (buf?.buffer) buf.fill(0);
+      else if (buf && buf.buffer) buf.fill(0);
     }
 
     function secureClearElement(el) {
@@ -487,74 +656,9 @@
       });
     }
 
-    function chatCleanup() {
-      if (ws && ws.readyState === _WebSocket.OPEN) ws.close();
-      ws = null;
-      cryptoKey = null;
-      myPeerId = null;
-      savedRoomUrl = null;
-      // Overwrite each message before removing
-      const msgs = document.getElementById('messages');
-      if (msgs) {
-        const children = msgs.querySelectorAll('.msg');
-        children.forEach(child => secureClearElement(child));
-        msgs.innerHTML = '';
-      }
-      secureClearElement(document.getElementById('msgInput'));
-      secureClearElement(document.getElementById('resultUrlText'));
-      navigator.clipboard.writeText('').catch(() => {});
-    }
-    window.addEventListener('pagehide', chatCleanup);
-    // No visibilitychange cleanup for chat — user switching tabs should not kill the session
-
-    const createView = document.getElementById('createView');
-    const chatView = document.getElementById('chatView');
-    const errorView = document.getElementById('errorView');
-    const messagesEl = document.getElementById('messages');
-
-    let ws = null;
-    let cryptoKey = null;
-    let myPeerId = null;
-    let savedRoomUrl = null;
-
     // ============================================================
-    // CRYPTO HELPERS (frozen references throughout)
+    // ENCODING HELPERS
     // ============================================================
-
-    async function generateKey() {
-      const key = await _subtle.generateKey(
-        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
-      );
-      const raw = await _subtle.exportKey('raw', key);
-      return { key, encoded: bufToBase64(new _Uint8Array(raw)) };
-    }
-
-    async function importKey(encoded) {
-      const raw = base64ToBuf(encoded);
-      return _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
-    }
-
-    async function encryptMsg(text, key) {
-      const iv = _getRandomValues(new _Uint8Array(12));
-      const encoded = new _TextEncoder().encode(text);
-      const ciphertext = await _subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-      wipeBuffer(encoded); // zero plaintext bytes immediately
-      return {
-        data: bufToBase64(new _Uint8Array(ciphertext)),
-        iv: bufToBase64(iv),
-      };
-    }
-
-    // Returns Uint8Array — caller must decode + wipe in tight block
-    async function decryptMsg(dataB64, ivB64, key) {
-      const ciphertext = base64ToBuf(dataB64);
-      const iv = base64ToBuf(ivB64);
-      const decrypted = await _subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-      const arr = new _Uint8Array(decrypted);
-      wipeBuffer(ciphertext);
-      wipeBuffer(iv);
-      return arr;
-    }
 
     function bufToBase64(buf) {
       let binary = '';
@@ -570,15 +674,246 @@
       return buf;
     }
 
+    function bufToHex(buf) {
+      let hex = '';
+      for (const b of buf) hex += b.toString(16).padStart(2, '0');
+      return hex;
+    }
+
+    function hexToBuf(hex) {
+      const buf = new _Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) buf[i / 2] = parseInt(hex.substr(i, 2), 16);
+      return buf;
+    }
+
+    // ============================================================
+    // CRYPTO HELPERS
+    // ============================================================
+
+    async function generateKey() {
+      const key = await _subtle.generateKey(
+        { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+      );
+      const raw = await _subtle.exportKey('raw', key);
+      const encoded = bufToBase64(new _Uint8Array(raw));
+      wipeBuffer(raw);
+      return { key, encoded };
+    }
+
+    async function importKey(encoded) {
+      const raw = base64ToBuf(encoded);
+      const key = await _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      wipeBuffer(raw);
+      return key;
+    }
+
+    async function deriveAccessToken(keyEncoded, roomId) {
+      const keyBytes = base64ToBuf(keyEncoded);
+      const baseKey = await _subtle.importKey('raw', keyBytes, 'HKDF', false, ['deriveBits']);
+      const salt = new _TextEncoder().encode(roomId);
+      const info = new _TextEncoder().encode('signal-room-access');
+      const bits = await _subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, baseKey, 256);
+      wipeBuffer(keyBytes);
+      return new _Uint8Array(bits);
+    }
+
+    async function sha256Hex(buf) {
+      const hash = await _subtle.digest('SHA-256', buf);
+      return bufToHex(new _Uint8Array(hash));
+    }
+
+    async function computeSafetyNumber(keyEncoded) {
+      const keyBytes = base64ToBuf(keyEncoded);
+      const hash = await _subtle.digest('SHA-256', keyBytes);
+      wipeBuffer(keyBytes);
+      const bytes = new _Uint8Array(hash);
+      let hex = '';
+      for (let i = 0; i < 16; i++) hex += bytes[i].toString(16).padStart(2, '0');
+      wipeBuffer(bytes);
+      return hex.match(/.{8}/g).join(' ');
+    }
+
+    // ============================================================
+    // RENDEZVOUS KEY DERIVATION
+    // ============================================================
+
+    async function deriveFromPassphrase(passphrase, seq, memberCount) {
+      const encoder = new _TextEncoder();
+      const passBytes = encoder.encode(passphrase);
+
+      // PBKDF2 stretching first (600,000 iterations) to resist offline brute-force
+      const pbkdfKey = await _subtle.importKey('raw', passBytes, 'PBKDF2', false, ['deriveBits']);
+      const stretchedBits = await _subtle.deriveBits({
+        name: 'PBKDF2', hash: 'SHA-256',
+        salt: encoder.encode('signal-rendezvous-v1-' + seq),
+        iterations: 600000,
+      }, pbkdfKey, 256);
+      wipeBuffer(passBytes);
+
+      // Use stretched key as HKDF base for sub-key derivation
+      const baseKey = await _subtle.importKey('raw', stretchedBits, 'HKDF', false, ['deriveBits']);
+      wipeBuffer(stretchedBits);
+
+      // Derive room ID (128 bits = 16 hex chars)
+      const roomBits = await _subtle.deriveBits({
+        name: 'HKDF', hash: 'SHA-256',
+        salt: encoder.encode('signal-rendezvous-room-' + seq),
+        info: encoder.encode('room-id'),
+      }, baseKey, 128);
+      const roomId = bufToHex(new _Uint8Array(roomBits)).slice(0, 16);
+
+      // Derive encryption key (256 bits)
+      const keyBits = await _subtle.deriveBits({
+        name: 'HKDF', hash: 'SHA-256',
+        salt: encoder.encode('signal-rendezvous-key-' + seq),
+        info: encoder.encode('encryption-key'),
+      }, baseKey, 256);
+      const keyEncoded = bufToBase64(new _Uint8Array(keyBits));
+      wipeBuffer(keyBits);
+
+      // Derive invite tokens (one per member, 128 bits each)
+      const inviteTokens = [];
+      for (let i = 0; i < memberCount; i++) {
+        const tokenBits = await _subtle.deriveBits({
+          name: 'HKDF', hash: 'SHA-256',
+          salt: encoder.encode('signal-rendezvous-invite-' + seq + '-' + i),
+          info: encoder.encode('invite-token'),
+        }, baseKey, 128);
+        inviteTokens.push(bufToHex(new _Uint8Array(tokenBits)));
+        wipeBuffer(tokenBits);
+      }
+
+      return { roomId, keyEncoded, inviteTokens };
+    }
+
+    // ============================================================
+    // MESSAGE PADDING
+    // ============================================================
+
+    const PAD_BUCKETS = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768];
+
+    function padMessage(msgBytes) {
+      const len = msgBytes.length;
+      const needed = 2 + len;
+      let bucket = PAD_BUCKETS[PAD_BUCKETS.length - 1];
+      for (let i = 0; i < PAD_BUCKETS.length; i++) {
+        if (PAD_BUCKETS[i] >= needed) { bucket = PAD_BUCKETS[i]; break; }
+      }
+      const padded = new _Uint8Array(bucket);
+      _getRandomValues(padded);
+      padded[0] = (len >> 8) & 0xFF;
+      padded[1] = len & 0xFF;
+      padded.set(msgBytes, 2);
+      return padded;
+    }
+
+    function unpadMessage(paddedBytes) {
+      if (paddedBytes.length < 2) throw new Error('Invalid');
+      const len = (paddedBytes[0] << 8) | paddedBytes[1];
+      if (len + 2 > paddedBytes.length) throw new Error('Invalid');
+      return paddedBytes.slice(2, 2 + len);
+    }
+
+    // ============================================================
+    // ENCRYPT / DECRYPT (with padding)
+    // ============================================================
+
+    async function encryptPadded(jsonObj, key) {
+      const jsonStr = _JSON_stringify(jsonObj);
+      const msgBytes = new _TextEncoder().encode(jsonStr);
+      const padded = padMessage(msgBytes);
+      wipeBuffer(msgBytes);
+      const iv = _getRandomValues(new _Uint8Array(12));
+      const ciphertext = await _subtle.encrypt({ name: 'AES-GCM', iv }, key, padded);
+      wipeBuffer(padded);
+      return {
+        data: bufToBase64(new _Uint8Array(ciphertext)),
+        iv: bufToBase64(iv),
+      };
+    }
+
+    async function decryptPadded(dataB64, ivB64, key) {
+      const ciphertext = base64ToBuf(dataB64);
+      const iv = base64ToBuf(ivB64);
+      const decrypted = await _subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+      wipeBuffer(ciphertext);
+      wipeBuffer(iv);
+      const paddedBytes = new _Uint8Array(decrypted);
+      const msgBytes = unpadMessage(paddedBytes);
+      wipeBuffer(paddedBytes);
+      const text = new _TextDecoder().decode(msgBytes);
+      wipeBuffer(msgBytes);
+      return _JSON_parse(text);
+    }
+
+    // ============================================================
+    // NOTIFICATION SOUND
+    // ============================================================
+
+    let audioCtx = null;
+    function playNotification() {
+      try {
+        if (!audioCtx) audioCtx = new _AudioContext();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 660;
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.15);
+      } catch {}
+    }
+
+    // ============================================================
+    // UI STATE
+    // ============================================================
+
+    const createView = document.getElementById('createView');
+    const callsignView = document.getElementById('callsignView');
+    const chatView = document.getElementById('chatView');
+    const errorView = document.getElementById('errorView');
+    const messagesEl = document.getElementById('messages');
+
+    let ws = null;
+    let cryptoKey = null;
+    let myPeerId = null;
+    let myCallsign = null;
+    let safetyNumber = null;
+    let roomExpiresAt = null;
+    let inactivityInterval = null;
+    let roomTimerInterval = null;
+    let lastActivity = _Date_now();
+    const peerCallsigns = new Map();
+
+    // Pending state (between create/URL-parse and actual WS connect)
+    let pendingKeyStr = null;
+    let pendingRoomId = null;
+    let pendingInviteToken = null;
+    let isRendezvous = false;
+    let rendezvousTokens = null;
+
+    const INACTIVITY_TIMEOUT = 2 * 60 * 1000;
+    const INACTIVITY_WARNING = 90 * 1000;
+
     // ============================================================
     // UI HELPERS
     // ============================================================
 
-    // System/error messages use textContent (no innerHTML for any messages)
+    function formatTime(date) {
+      return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+    }
+
     function addSystemMsg(text) {
       const div = document.createElement('div');
       div.className = 'msg msg-system';
-      div.textContent = text;
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'msg-time';
+      timeSpan.textContent = formatTime(new Date()) + ' ';
+      div.appendChild(timeSpan);
+      const txtNode = document.createTextNode(text);
+      div.appendChild(txtNode);
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -591,8 +926,38 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function addChatMsg(text, callsign, isSelf) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (isSelf ? 'msg-self' : 'msg-other');
+
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+
+      if (!isSelf) {
+        const peer = document.createElement('span');
+        peer.className = 'msg-peer';
+        peer.textContent = callsign;
+        meta.appendChild(peer);
+      }
+
+      const time = document.createElement('span');
+      time.className = 'msg-time';
+      time.textContent = formatTime(new Date());
+      meta.appendChild(time);
+
+      div.appendChild(meta);
+
+      const span = document.createElement('span');
+      span.textContent = text;
+      div.appendChild(span);
+
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
     function showError(title, desc) {
       createView.classList.add('hidden');
+      callsignView.classList.add('hidden');
       chatView.classList.add('hidden');
       document.getElementById('errorTitle').textContent = title;
       document.getElementById('errorDesc').textContent = desc;
@@ -600,129 +965,365 @@
     }
 
     // ============================================================
+    // INACTIVITY TIMEOUT
+    // ============================================================
+
+    function resetActivity() { lastActivity = _Date_now(); }
+
+    function startInactivityTimer() {
+      ['keydown', 'mousedown', 'touchstart', 'scroll'].forEach(function(evt) {
+        document.addEventListener(evt, resetActivity, { passive: true });
+      });
+
+      inactivityInterval = _setInterval(function() {
+        const elapsed = _Date_now() - lastActivity;
+        const bar = document.getElementById('timeoutBar');
+        if (elapsed >= INACTIVITY_TIMEOUT) {
+          _clearInterval(inactivityInterval);
+          inactivityInterval = null;
+          bar.style.display = 'none';
+          chatCleanup();
+          showError('Session timed out', 'Disconnected after 2 minutes of inactivity. All messages have been wiped.');
+        } else if (elapsed >= INACTIVITY_WARNING) {
+          const remaining = Math.ceil((INACTIVITY_TIMEOUT - elapsed) / 1000);
+          bar.textContent = 'Disconnecting in ' + remaining + 's due to inactivity';
+          bar.style.display = 'block';
+        } else {
+          bar.style.display = 'none';
+        }
+      }, 1000);
+    }
+
+    // ============================================================
+    // ROOM EXPIRY TIMER
+    // ============================================================
+
+    function startRoomTimer(expiresAt) {
+      roomExpiresAt = expiresAt;
+      const timerEl = document.getElementById('roomTimer');
+
+      function update() {
+        const remaining = roomExpiresAt - _Date_now();
+        if (remaining <= 0) {
+          timerEl.textContent = 'expired';
+          if (roomTimerInterval) _clearInterval(roomTimerInterval);
+          return;
+        }
+        const h = Math.floor(remaining / 3600000);
+        const m = Math.floor((remaining % 3600000) / 60000);
+        timerEl.textContent = h + 'h ' + m + 'm remaining';
+      }
+
+      update();
+      roomTimerInterval = _setInterval(update, 60000);
+    }
+
+    // ============================================================
+    // CLEANUP
+    // ============================================================
+
+    function chatCleanup() {
+      if (ws && ws.readyState <= 1) ws.close();
+      ws = null;
+      cryptoKey = null;
+      myPeerId = null;
+      myCallsign = null;
+      pendingKeyStr = null;
+      pendingRoomId = null;
+      pendingInviteToken = null;
+      isRendezvous = false;
+      rendezvousTokens = null;
+      safetyNumber = null;
+      peerCallsigns.clear();
+      if (inactivityInterval) { _clearInterval(inactivityInterval); inactivityInterval = null; }
+      if (roomTimerInterval) { _clearInterval(roomTimerInterval); roomTimerInterval = null; }
+      if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
+      const msgs = document.getElementById('messages');
+      if (msgs) {
+        msgs.querySelectorAll('.msg').forEach(function(child) { secureClearElement(child); });
+        msgs.innerHTML = '';
+      }
+      secureClearElement(document.getElementById('msgInput'));
+      secureClearElement(document.getElementById('passphrase'));
+      try { navigator.clipboard.writeText(''); } catch {}
+    }
+
+    window.addEventListener('pagehide', chatCleanup);
+
+    // ============================================================
     // CREATE ROOM
     // ============================================================
 
-    document.getElementById('createBtn').addEventListener('click', async () => {
-      const roomId = _randomUUID().replace(/-/g, '').slice(0, 16);
-      const { encoded: keyStr } = await generateKey();
-      const url = `${location.origin}/chat/${roomId}#${keyStr}`;
+    document.getElementById('createBtn').addEventListener('click', async function() {
+      const btn = document.getElementById('createBtn');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
 
-      document.getElementById('resultUrlText').textContent = url;
-      document.getElementById('roomLink').classList.remove('hidden');
+      try {
+        const memberCount = Math.max(2, Math.min(50, parseInt(document.getElementById('memberCount').value) || 5));
+        const roomId = _randomUUID().replace(/-/g, '').slice(0, 16);
+        const { key, encoded: keyStr } = await generateKey();
 
-      document.getElementById('resultUrl').addEventListener('click', () => {
-        safeCopy(url).then(() => {
-          const hint = document.querySelector('.copy-hint');
-          hint.textContent = 'copied (auto-clears 30s)';
-          _setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
+        // Generate invite tokens (one per member)
+        const inviteTokens = [];
+        for (let i = 0; i < memberCount; i++) {
+          const bytes = _getRandomValues(new _Uint8Array(16));
+          inviteTokens.push(bufToHex(bytes));
+          wipeBuffer(bytes);
+        }
+
+        // Derive access token via HKDF
+        const accessTokenBytes = await deriveAccessToken(keyStr, roomId);
+        const accessTokenHex = bufToHex(accessTokenBytes);
+        const accessTokenHash = await sha256Hex(accessTokenBytes);
+        wipeBuffer(accessTokenBytes);
+
+        // Hash invite tokens
+        const inviteTokenHashes = [];
+        for (let i = 0; i < inviteTokens.length; i++) {
+          const tBytes = hexToBuf(inviteTokens[i]);
+          inviteTokenHashes.push(await sha256Hex(tBytes));
+          wipeBuffer(tBytes);
+        }
+
+        // Register room on server
+        const resp = await _fetch('/api/chat/room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: _JSON_stringify({ roomId, accessTokenHash, inviteTokenHashes }),
         });
-      });
 
-      // Navigate to the room
-      _setTimeout(() => { location.href = url; }, 300);
+        if (!resp.ok) {
+          const err = await resp.json().catch(function() { return { error: 'Failed' }; });
+          throw new Error(err.error || 'Room creation failed');
+        }
+
+        // Store pending state for join
+        pendingRoomId = roomId;
+        pendingKeyStr = keyStr;
+        pendingInviteToken = inviteTokens[0]; // Creator uses first token
+
+        // Display invite URLs (skip first — reserved for creator)
+        const list = document.getElementById('inviteList');
+        for (let i = 1; i < inviteTokens.length; i++) {
+          const url = location.origin + '/chat/' + roomId + '?t=' + inviteTokens[i] + '#' + keyStr;
+          const item = document.createElement('div');
+          item.className = 'invite-item';
+          const label = document.createElement('span');
+          label.textContent = 'Invite ' + i + ' of ' + (inviteTokens.length - 1);
+          item.appendChild(label);
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'btn header-btn';
+          copyBtn.textContent = 'Copy';
+          (function(u, b) {
+            b.addEventListener('click', function() {
+              safeCopy(u).then(function() {
+                b.textContent = 'Copied';
+                _setTimeout(function() { b.textContent = 'Copy'; }, 3000);
+              });
+            });
+          })(url, copyBtn);
+          item.appendChild(copyBtn);
+          list.appendChild(item);
+        }
+
+        // Compute safety number early
+        safetyNumber = await computeSafetyNumber(keyStr);
+
+        // Show invite result
+        document.getElementById('createForm').classList.add('hidden');
+        document.getElementById('inviteResult').classList.remove('hidden');
+
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Create Room';
+        addErrorMsg(e.message || 'Failed to create room');
+      }
+    });
+
+    // Enter room from create view
+    document.getElementById('enterRoomBtn').addEventListener('click', function() {
+      createView.classList.add('hidden');
+      callsignView.classList.remove('hidden');
+      document.getElementById('callsignInput').focus();
     });
 
     // ============================================================
-    // JOIN ROOM
+    // JOIN (from callsign view)
     // ============================================================
 
-    async function joinRoom() {
-      const match = location.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
-      if (!match) return;
+    document.getElementById('joinBtn').addEventListener('click', function() {
+      const callsign = document.getElementById('callsignInput').value.trim().slice(0, 20);
+      myCallsign = callsign || null;
+      callsignView.classList.add('hidden');
+      connectToRoom();
+    });
 
-      const roomId = match[1];
-      const keyStr = location.hash.slice(1);
+    document.getElementById('callsignInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('joinBtn').click();
+    });
 
-      // Strip key from URL bar and history immediately
-      if (location.hash) _replaceState(null, '', location.pathname);
+    // ============================================================
+    // CONNECT TO ROOM
+    // ============================================================
 
-      if (!keyStr) {
-        showError('Missing key', 'The encryption key was not found in the URL. The link may be incomplete.');
-        return;
-      }
-
-      try {
-        cryptoKey = await importKey(keyStr);
-      } catch {
-        showError('Invalid key', 'The encryption key in the URL is invalid.');
-        return;
-      }
-
-      createView.classList.add('hidden');
-      chatView.classList.remove('hidden');
-      document.getElementById('roomIdDisplay').textContent = roomId;
-
-      // Copy link button (reconstruct full URL since hash was stripped from history)
-      savedRoomUrl = `${location.origin}/chat/${roomId}#${keyStr}`;
-      document.getElementById('copyLinkBtn').addEventListener('click', () => {
-        if (!savedRoomUrl) return;
-        safeCopy(savedRoomUrl).then(() => {
-          const btn = document.getElementById('copyLinkBtn');
-          btn.textContent = 'Copied (auto-clears 30s)';
-          _setTimeout(() => { btn.textContent = 'Copy link'; }, 3000);
-        });
-      });
-
-      // WebSocket connection
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new _WebSocket(`${proto}//${location.host}/chat/${roomId}`);
-
-      ws.addEventListener('open', () => {
+    function setupWebSocketHandlers(socket, roomId) {
+      socket.addEventListener('open', function() {
         addSystemMsg('connected');
         document.getElementById('msgInput').focus();
+        startInactivityTimer();
+        resetActivity();
       });
 
-      ws.addEventListener('message', async (event) => {
+      socket.addEventListener('message', async function(event) {
         try {
           const msg = _JSON_parse(event.data);
 
           if (msg.type === 'init') {
             myPeerId = msg.peer;
             document.getElementById('peerCount').textContent = msg.count;
-            addSystemMsg(`you are ${msg.peer}`);
+            addSystemMsg('you are ' + (myCallsign || msg.peer));
+            if (msg.expiresAt) startRoomTimer(msg.expiresAt);
+            // Send join announcement
+            const joinPayload = { t: 'j' };
+            if (myCallsign) joinPayload.c = myCallsign;
+            const { data, iv } = await encryptPadded(joinPayload, cryptoKey);
+            socket.send(_JSON_stringify({ type: 'msg', data, iv }));
+
           } else if (msg.type === 'join') {
             document.getElementById('peerCount').textContent = msg.count;
-            addSystemMsg(`${msg.peer} joined`);
+            addSystemMsg(msg.peer + ' joined');
+
           } else if (msg.type === 'leave') {
             document.getElementById('peerCount').textContent = msg.count;
-            addSystemMsg(`${msg.peer} left`);
+            const name = peerCallsigns.get(msg.peer) || msg.peer;
+            peerCallsigns.delete(msg.peer);
+            addSystemMsg(name + ' left');
+
+          } else if (msg.type === 'expired') {
+            chatCleanup();
+            showError('Room expired', 'This room has reached its 24-hour lifetime. All messages have been wiped.');
+
           } else if (msg.type === 'msg') {
-            const plainBytes = await decryptMsg(msg.data, msg.iv, cryptoKey);
-            // TIGHT BLOCK: decode, render, wipe — no async gaps
-            const text = new _TextDecoder().decode(plainBytes);
+            const parsed = await decryptPadded(msg.data, msg.iv, cryptoKey);
             const isSelf = msg.from === myPeerId;
-            const div = document.createElement('div');
-            div.className = 'msg ' + (isSelf ? 'msg-self' : 'msg-other');
-            if (!isSelf) {
-              const peer = document.createElement('div');
-              peer.className = 'msg-peer';
-              peer.textContent = msg.from;
-              div.appendChild(peer);
+
+            if (parsed.t === 'j') {
+              if (parsed.c && msg.from) {
+                peerCallsigns.set(msg.from, parsed.c);
+              }
+              if (!isSelf) {
+                const name = parsed.c || msg.from;
+                addSystemMsg(name + ' identified');
+                if (document.hidden) playNotification();
+              }
+            } else if (parsed.t === 'm') {
+              const callsign = isSelf ? (myCallsign || myPeerId) : (peerCallsigns.get(msg.from) || msg.from);
+              addChatMsg(parsed.x || '', callsign, isSelf);
+              if (!isSelf && document.hidden) playNotification();
             }
-            const span = document.createElement('span');
-            span.textContent = text;
-            div.appendChild(span);
-            messagesEl.appendChild(div);
-            messagesEl.scrollTop = messagesEl.scrollHeight;
-            wipeBuffer(plainBytes);
+
+            resetActivity();
           }
         } catch {
-          // Decryption failed or malformed message — silently ignore
+          // Decryption failed or malformed — silently ignore
         }
       });
 
-      ws.addEventListener('close', () => {
+      socket.addEventListener('close', function() {
+        if (chatView.classList.contains('hidden')) return;
         addErrorMsg('disconnected \u2014 room closed or connection lost');
         document.getElementById('sendBtn').disabled = true;
         document.getElementById('msgInput').disabled = true;
       });
+    }
 
-      ws.addEventListener('error', () => {
-        if (!myPeerId) {
-          showError('Connection failed', 'Could not connect to the chat room. The server may be unavailable.');
-        }
+    function tryConnectWithToken(roomId, accessHex, token) {
+      return new Promise(function(resolve, reject) {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new _WebSocket(proto + '//' + location.host + '/chat/' + roomId + '?access=' + accessHex + '&invite=' + token);
+        let settled = false;
+        socket.addEventListener('open', function() {
+          if (!settled) { settled = true; resolve(socket); }
+        });
+        socket.addEventListener('error', function() {
+          if (!settled) { settled = true; reject(new Error('Connection failed')); }
+        });
+        // Timeout after 5 seconds
+        _setTimeout(function() {
+          if (!settled) {
+            settled = true;
+            try { socket.close(); } catch {}
+            reject(new Error('Connection timeout'));
+          }
+        }, 5000);
       });
+    }
+
+    async function connectToRoom() {
+      const roomId = pendingRoomId;
+      const keyStr = pendingKeyStr;
+      const inviteToken = pendingInviteToken;
+
+      if (!roomId || !keyStr) {
+        showError('Missing data', 'Room connection data is incomplete.');
+        return;
+      }
+
+      try {
+        cryptoKey = await importKey(keyStr);
+      } catch {
+        showError('Invalid key', 'The encryption key is invalid.');
+        return;
+      }
+
+      if (!safetyNumber) {
+        safetyNumber = await computeSafetyNumber(keyStr);
+      }
+
+      const accessTokenBytes = await deriveAccessToken(keyStr, roomId);
+      const accessTokenHex = bufToHex(accessTokenBytes);
+      wipeBuffer(accessTokenBytes);
+
+      pendingKeyStr = null;
+
+      // Show chat view
+      chatView.classList.remove('hidden');
+      document.getElementById('roomIdDisplay').textContent = roomId;
+      document.getElementById('safetyNumber').textContent = safetyNumber;
+
+      if (isRendezvous && rendezvousTokens) {
+        // Try each token sequentially until one connects
+        let connected = false;
+        for (let i = 0; i < rendezvousTokens.length; i++) {
+          try {
+            ws = await tryConnectWithToken(roomId, accessTokenHex, rendezvousTokens[i]);
+            setupWebSocketHandlers(ws, roomId);
+            connected = true;
+            break;
+          } catch {
+            // Token failed — try next
+          }
+        }
+        rendezvousTokens = null;
+        if (!connected) {
+          showError('Room not available', 'Could not connect. The room may not exist yet or all invite tokens have been used. Try again or use the next sequence number.');
+          return;
+        }
+      } else {
+        if (!inviteToken) {
+          showError('Missing invite', 'No invite token found.');
+          return;
+        }
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new _WebSocket(proto + '//' + location.host + '/chat/' + roomId + '?access=' + accessTokenHex + '&invite=' + inviteToken);
+        setupWebSocketHandlers(ws, roomId);
+        ws.addEventListener('error', function() {
+          if (!myPeerId) {
+            showError('Connection failed', 'Could not connect to the chat room. The invite may have been used or the room may have expired.');
+          }
+        });
+      }
     }
 
     // ============================================================
@@ -735,24 +1336,157 @@
       if (!text || !ws || ws.readyState !== _WebSocket.OPEN) return;
 
       try {
-        const { data, iv } = await encryptMsg(text, cryptoKey);
+        const payload = { t: 'm', x: text };
+        if (myCallsign) payload.c = myCallsign;
+        const { data, iv } = await encryptPadded(payload, cryptoKey);
         ws.send(_JSON_stringify({ type: 'msg', data, iv }));
         input.value = '';
         input.focus();
+        resetActivity();
       } catch {
         addErrorMsg('failed to encrypt message');
       }
     }
 
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
-    document.getElementById('msgInput').addEventListener('keydown', (e) => {
+    document.getElementById('msgInput').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') sendMessage();
     });
 
-    // Route
-    if (location.pathname.match(/^\/chat\/[a-zA-Z0-9]+$/)) {
-      joinRoom();
-    }
+    // ============================================================
+    // PURGE CONVERSATION
+    // ============================================================
+
+    document.getElementById('purgeBtn').addEventListener('click', function() {
+      messagesEl.querySelectorAll('.msg').forEach(function(child) { secureClearElement(child); });
+      messagesEl.innerHTML = '';
+      peerCallsigns.clear();
+      addSystemMsg('conversation purged');
+    });
+
+    // ============================================================
+    // VERIFY SAFETY NUMBER
+    // ============================================================
+
+    document.getElementById('verifyBtn').addEventListener('click', function() {
+      const panel = document.getElementById('verifyPanel');
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    });
+
+    // ============================================================
+    // RENDEZVOUS
+    // ============================================================
+
+    document.getElementById('rendezvousBtn').addEventListener('click', async function() {
+      const btn = document.getElementById('rendezvousBtn');
+      const passphraseInput = document.getElementById('passphrase');
+      const passphrase = passphraseInput.value;
+      const seq = parseInt(document.getElementById('seqNum').value) || 1;
+      const memberCount = Math.max(2, Math.min(16, parseInt(document.getElementById('rvMemberCount').value) || 5));
+
+      if (!passphrase || passphrase.length < 6) {
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Deriving keys...';
+
+      try {
+        const derived = await deriveFromPassphrase(passphrase, seq, memberCount);
+
+        // Wipe passphrase from input immediately
+        secureClearElement(passphraseInput);
+
+        // Derive access token
+        const accessTokenBytes = await deriveAccessToken(derived.keyEncoded, derived.roomId);
+        const accessTokenHex = bufToHex(accessTokenBytes);
+        const accessTokenHash = await sha256Hex(accessTokenBytes);
+        wipeBuffer(accessTokenBytes);
+
+        // Hash invite tokens for server registration
+        const inviteTokenHashes = [];
+        for (const t of derived.inviteTokens) {
+          const tBytes = hexToBuf(t);
+          inviteTokenHashes.push(await sha256Hex(tBytes));
+          wipeBuffer(tBytes);
+        }
+
+        // Try to register the room (may already exist if another member registered first)
+        const resp = await _fetch('/api/chat/room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: _JSON_stringify({
+            roomId: derived.roomId,
+            accessTokenHash,
+            inviteTokenHashes,
+          }),
+        });
+
+        // 201 = we created it, 409 = already exists (another member created it) — both OK
+        if (!resp.ok && resp.status !== 409) {
+          const err = await resp.json().catch(function() { return { error: 'Failed' }; });
+          throw new Error(err.error || 'Room setup failed');
+        }
+
+        // Set up rendezvous state
+        isRendezvous = true;
+        rendezvousTokens = derived.inviteTokens;
+        pendingRoomId = derived.roomId;
+        pendingKeyStr = derived.keyEncoded;
+        pendingInviteToken = null; // Will try all tokens
+        safetyNumber = await computeSafetyNumber(derived.keyEncoded);
+
+        // Go to callsign view
+        createView.classList.add('hidden');
+        callsignView.classList.remove('hidden');
+        document.getElementById('callsignInput').focus();
+
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Rendezvous';
+      }
+    });
+
+    // ============================================================
+    // ROUTE
+    // ============================================================
+
+    (function() {
+      const pathMatch = location.pathname.match(/^\/chat\/([a-zA-Z0-9]+)$/);
+
+      if (pathMatch) {
+        // Joining a room via invite URL
+        const roomId = pathMatch[1];
+        const urlParams = new URLSearchParams(location.search);
+        const inviteToken = urlParams.get('t');
+        const keyStr = location.hash.slice(1);
+
+        // Strip query params and fragment from URL bar
+        if (location.hash || location.search) {
+          _replaceState(null, '', location.pathname);
+        }
+
+        if (!keyStr) {
+          showError('Missing key', 'The encryption key was not found in the URL. The link may be incomplete.');
+          return;
+        }
+
+        if (!inviteToken) {
+          showError('Missing invite', 'No invite token found. You need a valid invite link to join this room.');
+          return;
+        }
+
+        pendingRoomId = roomId;
+        pendingKeyStr = keyStr;
+        pendingInviteToken = inviteToken;
+
+        // Show callsign entry
+        createView.classList.add('hidden');
+        callsignView.classList.remove('hidden');
+        document.getElementById('callsignInput').focus();
+      }
+      // Otherwise, show create view (default)
+    })();
   </script>
 </body>
 </html>

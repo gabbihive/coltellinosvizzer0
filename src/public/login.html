@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Login</title>
+  <meta name="referrer" content="no-referrer">
+  <title>Login</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -112,17 +113,17 @@
   </style>
 </head>
 <body>
-  <form class="login-card" id="loginForm" autocomplete="on">
-    <h1>Admin</h1>
-    <p>authenticate to continue</p>
+  <form class="login-card" id="loginForm" autocomplete="off">
+    <h1>Authenticate</h1>
+    <p>credentials required</p>
 
     <div class="error-msg" id="errorMsg"></div>
 
     <label for="username">Username</label>
-    <input type="text" id="username" name="username" autocomplete="username" placeholder="admin" required>
+    <input type="text" id="username" name="username" autocomplete="off" placeholder="admin" required>
 
     <label for="password">Password</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" required>
+    <input type="password" id="password" name="password" autocomplete="off" required>
 
     <button type="submit" class="btn" id="loginBtn">Authenticate</button>
 

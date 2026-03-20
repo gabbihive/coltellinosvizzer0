@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin</title>
+  <meta name="referrer" content="no-referrer">
+  <title>Panel</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -197,6 +198,7 @@
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="drops">Drops</button>
     <button class="tab" data-tab="files">Files</button>
+    <button class="tab" data-tab="rooms">Rooms</button>
     <button class="tab" data-tab="settings">Settings</button>
   </nav>
 
@@ -339,6 +341,50 @@
       </div>
     </div>
 
+    <!-- ROOMS -->
+    <div id="tab-rooms" class="tab-content">
+      <div class="cards">
+        <div class="card">
+          <div class="label">Registered</div>
+          <div class="value" id="roomsRegistered">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Active</div>
+          <div class="value" id="roomsActive">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Connected</div>
+          <div class="value" id="roomsConnected">--</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>All Rooms</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-danger" onclick="purgeAllRooms()">Purge All</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Room ID</th><th>Status</th><th>Connected</th><th>Invites Left</th><th>Expires</th><th>Created</th>
+            <th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody id="roomTableBody">
+            <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section" style="padding:16px;">
+        <p style="font-size:11px;color:#333;line-height:1.6;">
+          Signal Rooms are end-to-end encrypted. The server relays only ciphertext.
+          Room IDs and connection metadata are visible but message content is not.
+          Killing a room disconnects all participants and destroys the room registration.
+        </p>
+      </div>
+    </div>
+
     <!-- SETTINGS -->
     <div id="tab-settings" class="tab-content">
       <div class="section">
@@ -458,6 +504,7 @@
         dashboard: () => { fetchStatus(); fetchLogs(); },
         drops: () => { fetchDropStats(); fetchDrops(); },
         files: () => { fetchFileStats(); fetchFiles(); },
+        rooms: () => { fetchRoomStats(); fetchRooms(); },
         settings: () => { fetchSystem(); },
       };
       if (r[name]) r[name]();
@@ -503,11 +550,11 @@
           const sc = l.status < 300 ? 's2' : l.status < 400 ? 's3' : l.status < 500 ? 's4' : 's5';
           const time = new Date(l.time).toLocaleTimeString();
           return `<tr>
-            <td style="color:#444">${time}</td>
-            <td><code>${l.method}</code></td>
+            <td style="color:#444">${esc(time)}</td>
+            <td><code>${esc(String(l.method))}</code></td>
             <td>${esc(l.path)}</td>
-            <td><span class="${sc}">${l.status}</span></td>
-            <td style="text-align:right;color:#444">${l.ms}ms</td>
+            <td><span class="${sc}">${esc(String(l.status))}</span></td>
+            <td style="text-align:right;color:#444">${esc(String(l.ms))}ms</td>
           </tr>`;
         }).join('');
       } catch {}
@@ -648,6 +695,67 @@
       } else { showToast('Failed to purge', 'error'); }
     }
 
+    // ===================== ROOMS =====================
+
+    async function fetchRoomStats() {
+      try {
+        const res = await fetch('/api/chat/stats');
+        const d = await res.json();
+        document.getElementById('roomsRegistered').textContent = d.registered;
+        document.getElementById('roomsActive').textContent = d.rooms;
+        document.getElementById('roomsConnected').textContent = d.clients;
+      } catch {}
+    }
+
+    async function fetchRooms() {
+      try {
+        const res = await fetch('/api/chat/rooms');
+        const rooms = await res.json();
+        const tbody = document.getElementById('roomTableBody');
+        if (rooms.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No rooms.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rooms.map(r => {
+          const status = r.expired
+            ? '<span class="tag tag-expired">expired</span>'
+            : '<span class="tag tag-active">active</span>';
+          return `<tr>
+            <td><code>${esc(r.id)}</code></td>
+            <td>${status}</td>
+            <td>${r.connected}</td>
+            <td>${r.invitesRemaining}</td>
+            <td style="color:#444">${r.expired ? 'expired' : timeUntil(r.expiresAt)}</td>
+            <td style="color:#444">${fmtDateTime(r.createdAt)}</td>
+            <td><div class="cell-actions">
+              <button class="btn btn-sm btn-danger" onclick="killRoom('${esc(r.id)}')">Kill</button>
+            </div></td>
+          </tr>`;
+        }).join('');
+      } catch {}
+    }
+
+    async function killRoom(id) {
+      if (!confirm('Kill this room? All participants will be disconnected.')) return;
+      const res = await fetch('/api/chat/rooms/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Room killed');
+        fetchRooms();
+        fetchRoomStats();
+      } else { showToast('Failed to kill room', 'error'); }
+    }
+
+    async function purgeAllRooms() {
+      if (!confirm('Purge ALL rooms? All participants will be disconnected.')) return;
+      const res = await fetch('/api/chat/rooms/purge', { method: 'POST' });
+      if (res.ok) {
+        const d = await res.json();
+        showToast(`Purged ${d.purged} room${d.purged !== 1 ? 's' : ''}`);
+        fetchRooms();
+        fetchRoomStats();
+      } else { showToast('Failed to purge rooms', 'error'); }
+    }
+
     // ===================== SETTINGS =====================
 
     async function fetchSystem() {
@@ -659,12 +767,12 @@
           ['Node', esc(d.nodeVersion)],
           ['Platform', esc(d.platform)],
           ['Arch', esc(d.arch)],
-          ['CPUs', d.cpus],
-          ['Total Mem', d.totalMemory + ' MB'],
-          ['Free Mem', d.freeMemory + ' MB'],
-          ['Process Mem', d.processMemory + ' MB'],
-          ['Uptime', formatUptime(d.uptime)],
-        ].map(([k, v]) => `<tr><td style="color:#666">${k}</td><td>${v}</td></tr>`).join('');
+          ['CPUs', esc(String(d.cpus))],
+          ['Total Mem', esc(String(d.totalMemory)) + ' MB'],
+          ['Free Mem', esc(String(d.freeMemory)) + ' MB'],
+          ['Process Mem', esc(String(d.processMemory)) + ' MB'],
+          ['Uptime', esc(formatUptime(d.uptime))],
+        ].map(([k, v]) => `<tr><td style="color:#666">${esc(k)}</td><td>${v}</td></tr>`).join('');
 
         document.getElementById('envVars').innerHTML = Object.entries(d.env)
           .sort(([a], [b]) => a.localeCompare(b))
