@@ -29,13 +29,29 @@ Zero-knowledge encrypted ephemeral chat at `/chat`. Real-time messaging where th
 - **No traces** — no logging, no IP tracking, no metadata on chat routes
 - **Rooms auto-destroy** when the last participant disconnects
 
+### File Drop
+
+Zero-knowledge encrypted file sharing at `/file`. Share files anonymously with automatic metadata stripping.
+
+- **Client-side AES-256-GCM encryption** — files encrypted in browser before upload
+- **Key in URL fragment** — decryption key never sent to the server
+- **Automatic EXIF stripping** — image metadata (GPS, camera info, timestamps) removed via Canvas re-render
+- **Encrypted metadata** — filename and file type are encrypted separately, server never sees them
+- **Burn after download** — optionally destroy the file after one download
+- **Auto-expiry** — 1 hour, 24 hours, 7 days, or 30 days
+- **No traces** — no logging, no IP tracking, no cookies, no metadata on file routes
+- **In-memory storage** — files are never written to disk, lost on restart
+- **10 MB max** per file, 500 MB total storage
+- **Upload rate limiting** — 20 uploads per IP per hour
+
 ## Admin Panel
 
 Authenticated control panel at `/panel` (login at `/login.html`).
 
 **Tabs:**
-- **Dashboard** — uptime, memory, active drops, chat rooms/peers, request log
+- **Dashboard** — uptime, memory, active drops, active files, chat rooms/peers, request log
 - **Drops** — view/delete encrypted drops, purge expired, stats
+- **Files** — view/delete encrypted files, purge expired, storage stats
 - **Settings** — change password, environment variables, system info
 
 ## Local Development
@@ -66,6 +82,7 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 ## Security
 
 - **Login rate limiting** — 5 attempts per IP per minute
+- **File upload rate limiting** — 20 uploads per IP per hour
 - **CSRF origin checking** on all state-changing requests
 - **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, HSTS in production
 - **WebSocket origin validation** — only allowed origins can connect
@@ -75,10 +92,11 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Connection limits** — per-IP (10), global (500), per-room (50), max rooms (1000)
 - **Rate limiting** — 10 WebSocket messages/sec per connection
 - **Allowlist-based env var exposure** in system info API
+- **Image metadata stripping** — EXIF/GPS/camera data removed client-side
 
 ## API
 
-All `/api/*` endpoints require authentication except `/api/drop` and `/api/chat` (public).
+All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, and `/api/chat` (public).
 
 ### Public (no auth)
 
@@ -86,6 +104,8 @@ All `/api/*` endpoints require authentication except `/api/drop` and `/api/chat`
 |--------|----------|-------------|
 | `POST` | `/api/drop` | Create encrypted drop (`{ encrypted, iv, burn?, expiry? }`) |
 | `GET` | `/api/drop/:id` | Retrieve encrypted drop (deletes if burn-after-read) |
+| `POST` | `/api/file` | Create encrypted file (`{ encrypted, iv, encryptedMeta, metaIv, burn?, expiry? }`) |
+| `GET` | `/api/file/:id` | Retrieve encrypted file (deletes if burn-after-download) |
 
 ### Auth
 
@@ -105,6 +125,10 @@ All `/api/*` endpoints require authentication except `/api/drop` and `/api/chat`
 | `GET` | `/api/drops/stats` | Drop statistics |
 | `DELETE` | `/api/drops/:id` | Delete a drop |
 | `POST` | `/api/drops/purge-expired` | Delete all expired drops |
+| `GET` | `/api/files` | List all files (metadata only) |
+| `GET` | `/api/files/stats` | File statistics |
+| `DELETE` | `/api/files/:id` | Delete a file |
+| `POST` | `/api/files/purge-expired` | Delete all expired files |
 | `GET` | `/api/chat/stats` | Chat room/peer counts |
 | `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |
@@ -118,6 +142,7 @@ src/
     landing.html         # Tools index (/)
     drop.html            # Dead Drop UI (/drop)
     chat.html            # Signal Room UI (/chat)
+    file.html            # File Drop UI (/file)
     index.html           # Admin panel (/panel)
     login.html           # Login page
 ```

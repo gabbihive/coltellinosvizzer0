@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Drop</title>
+  <meta name="referrer" content="no-referrer">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      background: #0a0a0a;
+      color: #a0a0a0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 700px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 40px 20px;
+      flex: 1;
+    }
+
+    header { margin-bottom: 40px; }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e0e0;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    header p { font-size: 12px; color: #505050; }
+
+    .notice {
+      background: #0d1a0d;
+      border: 1px solid #1a331a;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 11px;
+      color: #4a8c4a;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .notice strong { color: #6abf6a; }
+
+    .hidden { display: none !important; }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #222;
+      border-radius: 4px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #4a8c4a;
+      background: #0d1a0d;
+    }
+
+    .drop-zone-arrow { font-size: 24px; color: #333; margin-bottom: 12px; }
+    .drop-zone-text { font-size: 13px; color: #666; }
+    .drop-zone-limit { font-size: 11px; color: #333; margin-top: 8px; }
+
+    /* File info */
+    .file-info {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .file-icon {
+      width: 40px;
+      height: 40px;
+      background: #0d1a0d;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #4a8c4a;
+      flex-shrink: 0;
+    }
+
+    .file-details { flex: 1; min-width: 0; }
+    .file-name { font-size: 13px; color: #e0e0e0; word-break: break-all; }
+    .file-size { font-size: 11px; color: #555; margin-top: 2px; }
+    .file-meta { font-size: 10px; color: #4a8c4a; margin-top: 4px; }
+
+    .btn-clear {
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 16px;
+      padding: 4px 8px;
+      transition: color 0.15s;
+    }
+
+    .btn-clear:hover { color: #8c4a4a; }
+
+    .options {
+      display: flex;
+      gap: 16px;
+      margin: 16px 0;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .options label {
+      font-size: 12px;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    select {
+      background: #111;
+      border: 1px solid #222;
+      color: #a0a0a0;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus { border-color: #333; }
+
+    input[type="checkbox"] {
+      accent-color: #c0392b;
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      background: #1a1a1a;
+      color: #a0a0a0;
+      border: 1px solid #333;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { background: #222; color: #e0e0e0; border-color: #444; }
+    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .btn-primary {
+      background: #0d1a0d;
+      border-color: #1a331a;
+      color: #4a8c4a;
+    }
+
+    .btn-primary:hover { background: #143014; color: #6abf6a; }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .result { margin-top: 24px; }
+
+    .result-url {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #6abf6a;
+      word-break: break-all;
+      cursor: pointer;
+      position: relative;
+      line-height: 1.5;
+    }
+
+    .result-url:hover { border-color: #333; }
+
+    .result-url .copy-hint {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .result-warn {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #8c4a4a;
+    }
+
+    /* Download view */
+    .dl-card {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .dl-icon {
+      width: 56px;
+      height: 56px;
+      background: #0d1a0d;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #4a8c4a;
+      margin: 0 auto 16px;
+    }
+
+    .dl-name {
+      font-size: 14px;
+      color: #e0e0e0;
+      word-break: break-all;
+      margin-bottom: 4px;
+    }
+
+    .dl-size { font-size: 11px; color: #555; }
+
+    .burned-notice {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #c0392b;
+    }
+
+    .error-view {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .error-view h2 {
+      font-size: 16px;
+      color: #666;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .error-view p { font-size: 12px; color: #444; }
+    .error-view .btn { margin-top: 24px; }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 10px;
+      color: #282828;
+      letter-spacing: 1px;
+    }
+
+    .security-info {
+      margin-top: 32px;
+      border-top: 1px solid #181818;
+      padding-top: 20px;
+    }
+
+    .security-info summary {
+      font-size: 11px;
+      color: #444;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      outline: none;
+    }
+
+    .security-info summary:hover { color: #666; }
+
+    .security-info .detail {
+      margin-top: 12px;
+      font-size: 11px;
+      color: #383838;
+      line-height: 1.8;
+    }
+
+    .security-info .detail code {
+      color: #505050;
+      background: #111;
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    @media (max-width: 500px) {
+      .options { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>File Drop</h1>
+      <p>zero-knowledge encrypted file sharing</p>
+    </header>
+
+    <!-- UPLOAD VIEW -->
+    <div id="uploadView">
+      <div class="notice">
+        <strong>Zero knowledge.</strong> Your file is encrypted in your browser before it reaches the server.
+        The decryption key is in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
+        Image metadata (EXIF, GPS, camera info) is <strong>automatically stripped</strong>.
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" hidden>
+        <div class="drop-zone-arrow">&uarr;</div>
+        <div class="drop-zone-text">Drop a file here or click to browse</div>
+        <div class="drop-zone-limit">10 MB max</div>
+      </div>
+
+      <div class="file-info hidden" id="fileInfo">
+        <div class="file-icon" id="fileIcon">&para;</div>
+        <div class="file-details">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-size" id="fileSize"></div>
+          <div class="file-meta hidden" id="fileMeta"></div>
+        </div>
+        <button class="btn-clear" id="clearFile" title="Remove">&times;</button>
+      </div>
+
+      <div class="options">
+        <label>
+          Expires:
+          <select id="expiry">
+            <option value="1h">1 hour</option>
+            <option value="24h" selected>24 hours</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" id="burn">
+          Burn after download
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="encryptBtn" disabled>Encrypt &amp; Upload</button>
+      </div>
+
+      <div class="result hidden" id="result">
+        <div class="result-url" id="resultUrl" title="Click to copy">
+          <span class="copy-hint">click to copy</span>
+          <span id="resultUrlText"></span>
+        </div>
+        <p class="result-warn" id="resultWarn"></p>
+      </div>
+
+      <div class="security-info">
+        <details>
+          <summary>How it works</summary>
+          <div class="detail">
+            1. Your file is encrypted with <code>AES-256-GCM</code> using the Web Crypto API<br>
+            2. A random 256-bit key is generated in your browser<br>
+            3. Image metadata (EXIF, GPS, camera info) is automatically stripped via Canvas re-render<br>
+            4. The filename and file type are encrypted separately from the content<br>
+            5. Only encrypted ciphertext is sent to the server<br>
+            6. The key is placed in the URL fragment (<code>#</code>), which browsers never transmit<br>
+            7. The server never sees your file, filename, or file type &mdash; even if compromised<br>
+            8. Burn-after-download files are deleted from memory after one retrieval<br>
+            9. No IP addresses, no cookies, no user agents, no analytics are recorded for file drops
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- DOWNLOAD VIEW -->
+    <div class="hidden" id="downloadView">
+      <div class="dl-card">
+        <div class="dl-icon">&darr;</div>
+        <div class="dl-name" id="dlFileName">Decrypting...</div>
+        <div class="dl-size" id="dlFileSize"></div>
+      </div>
+      <p class="burned-notice hidden" id="burnedNotice">This file has been destroyed. It cannot be downloaded again.</p>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn btn-primary" id="downloadBtn" disabled>Decrypting...</button>
+        <a href="/file" class="btn" style="text-decoration:none">New file drop</a>
+      </div>
+    </div>
+
+    <!-- ERROR VIEW -->
+    <div class="error-view hidden" id="errorView">
+      <h2 id="errorTitle">Not found</h2>
+      <p id="errorDesc">This file has expired, been burned, or never existed.</p>
+      <a href="/file" class="btn" style="text-decoration:none">Upload a new file</a>
+    </div>
+  </div>
+
+  <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
+
+  <script>
+    const uploadView = document.getElementById('uploadView');
+    const downloadView = document.getElementById('downloadView');
+    const errorView = document.getElementById('errorView');
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+
+    // --- Crypto helpers (Web Crypto API, AES-256-GCM) ---
+
+    async function generateKey() {
+      const key = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+      );
+      const raw = await crypto.subtle.exportKey('raw', key);
+      return { key, encoded: bufToBase64(new Uint8Array(raw)) };
+    }
+
+    async function importKey(encoded) {
+      const raw = base64ToBuf(encoded);
+      return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    }
+
+    async function encryptBytes(data, key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv }, key, data
+      );
+      return { encrypted: bufToBase64(new Uint8Array(ciphertext)), iv: bufToBase64(iv) };
+    }
+
+    async function decryptBytes(encryptedB64, ivB64, key) {
+      const ciphertext = base64ToBuf(encryptedB64);
+      const iv = base64ToBuf(ivB64);
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    }
+
+    function bufToBase64(buf) {
+      let binary = '';
+      for (const b of buf) binary += String.fromCharCode(b);
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64ToBuf(str) {
+      const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      const binary = atob(b64);
+      const buf = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+      return buf;
+    }
+
+    // --- Metadata stripping ---
+
+    async function stripImageMetadata(file) {
+      const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!imageTypes.includes(file.type)) return null;
+
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          const quality = file.type === 'image/png' ? undefined : 0.95;
+          canvas.toBlob((blob) => {
+            if (blob) blob.arrayBuffer().then(resolve).catch(reject);
+            else reject(new Error('Canvas export failed'));
+          }, file.type, quality);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Image load failed'));
+        };
+        img.src = url;
+      });
+    }
+
+    // --- Helpers ---
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function fileTypeIcon(type) {
+      if (type.startsWith('image/')) return '\u25A3';
+      if (type.startsWith('video/')) return '\u25B6';
+      if (type.startsWith('audio/')) return '\u266B';
+      if (type.includes('pdf')) return '\u25A4';
+      if (type.includes('zip') || type.includes('tar') || type.includes('gzip')) return '\u229E';
+      return '\u00B6';
+    }
+
+    function showError(title, desc) {
+      uploadView.classList.add('hidden');
+      downloadView.classList.add('hidden');
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorDesc').textContent = desc;
+      errorView.classList.remove('hidden');
+    }
+
+    // --- Upload mode ---
+
+    let selectedFile = null;
+    let processedBuffer = null;
+    let wasMetadataStripped = false;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+    });
+
+    async function handleFile(file) {
+      const MAX_SIZE = 10 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        alert('File too large. Maximum size is 10 MB.');
+        return;
+      }
+
+      selectedFile = file;
+      wasMetadataStripped = false;
+
+      // Attempt image metadata stripping
+      try {
+        const stripped = await stripImageMetadata(file);
+        if (stripped) {
+          processedBuffer = stripped;
+          wasMetadataStripped = true;
+        } else {
+          processedBuffer = await file.arrayBuffer();
+        }
+      } catch {
+        processedBuffer = await file.arrayBuffer();
+      }
+
+      // Update UI
+      document.getElementById('fileIcon').textContent = fileTypeIcon(file.type);
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('fileSize').textContent = formatSize(file.size);
+
+      const metaEl = document.getElementById('fileMeta');
+      if (wasMetadataStripped) {
+        metaEl.textContent = 'EXIF / GPS / camera metadata stripped';
+        metaEl.classList.remove('hidden');
+      } else {
+        metaEl.classList.add('hidden');
+      }
+
+      document.getElementById('fileInfo').classList.remove('hidden');
+      dropZone.classList.add('hidden');
+      document.getElementById('encryptBtn').disabled = false;
+    }
+
+    document.getElementById('clearFile').addEventListener('click', () => {
+      selectedFile = null;
+      processedBuffer = null;
+      wasMetadataStripped = false;
+      fileInput.value = '';
+      document.getElementById('fileInfo').classList.add('hidden');
+      dropZone.classList.remove('hidden');
+      document.getElementById('encryptBtn').disabled = true;
+      document.getElementById('result').classList.add('hidden');
+    });
+
+    document.getElementById('encryptBtn').addEventListener('click', async () => {
+      if (!selectedFile || !processedBuffer) return;
+
+      const btn = document.getElementById('encryptBtn');
+      btn.disabled = true;
+      btn.textContent = 'Encrypting...';
+
+      try {
+        const { key, encoded: keyStr } = await generateKey();
+
+        // Encrypt file content
+        const { encrypted, iv } = await encryptBytes(processedBuffer, key);
+
+        // Encrypt metadata (filename + type)
+        const meta = JSON.stringify({ name: selectedFile.name, type: selectedFile.type });
+        const metaBytes = new TextEncoder().encode(meta);
+        const { encrypted: encryptedMeta, iv: metaIv } = await encryptBytes(metaBytes, key);
+
+        btn.textContent = 'Uploading...';
+
+        const res = await fetch('/api/file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            encrypted,
+            iv,
+            encryptedMeta,
+            metaIv,
+            burn: document.getElementById('burn').checked,
+            expiry: document.getElementById('expiry').value,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Upload failed');
+        }
+
+        const { id } = await res.json();
+        const url = `${location.origin}/file/${id}#${keyStr}`;
+
+        document.getElementById('resultUrlText').textContent = url;
+        document.getElementById('result').classList.remove('hidden');
+
+        if (document.getElementById('burn').checked) {
+          document.getElementById('resultWarn').textContent =
+            'This file will self-destruct after being downloaded once. Save this link now.';
+        } else {
+          document.getElementById('resultWarn').textContent = '';
+        }
+
+        // Clear selection
+        selectedFile = null;
+        processedBuffer = null;
+      } catch (err) {
+        alert(err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Encrypt & Upload';
+    });
+
+    document.getElementById('resultUrl').addEventListener('click', () => {
+      const url = document.getElementById('resultUrlText').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        const hint = document.querySelector('.copy-hint');
+        hint.textContent = 'copied';
+        setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+      });
+    });
+
+    // --- Download mode ---
+
+    let decryptedBlob = null;
+    let decryptedName = 'download';
+
+    async function loadFile() {
+      const match = location.pathname.match(/^\/file\/(.+)$/);
+      if (!match) return;
+
+      const id = match[1];
+      const keyStr = location.hash.slice(1);
+
+      if (!keyStr) {
+        showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');
+        return;
+      }
+
+      uploadView.classList.add('hidden');
+      downloadView.classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/api/file/${id}`);
+        if (!res.ok) {
+          showError('Not found', 'This file has expired, been burned, or never existed.');
+          return;
+        }
+
+        const data = await res.json();
+        const key = await importKey(keyStr);
+
+        // Decrypt metadata
+        const metaBuffer = await decryptBytes(data.encryptedMeta, data.metaIv, key);
+        const meta = JSON.parse(new TextDecoder().decode(metaBuffer));
+
+        if (typeof meta.name !== 'string') throw new Error('Invalid metadata');
+
+        // Decrypt file content
+        const fileBuffer = await decryptBytes(data.encrypted, data.iv, key);
+
+        decryptedName = meta.name.replace(/[/\\]/g, '_'); // sanitize path separators
+        const mimeType = (typeof meta.type === 'string' && meta.type) ? meta.type : 'application/octet-stream';
+        decryptedBlob = new Blob([fileBuffer], { type: mimeType });
+
+        // Update UI
+        document.getElementById('dlFileName').textContent = decryptedName;
+        document.getElementById('dlFileSize').textContent = formatSize(fileBuffer.byteLength);
+        document.getElementById('downloadBtn').textContent = 'Download';
+        document.getElementById('downloadBtn').disabled = false;
+
+        if (data.burn) {
+          document.getElementById('burnedNotice').classList.remove('hidden');
+        }
+      } catch (err) {
+        showError('Decryption failed', 'The key is invalid or the data has been corrupted.');
+      }
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      if (!decryptedBlob) return;
+      const url = URL.createObjectURL(decryptedBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = decryptedName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    // Route
+    if (location.pathname.match(/^\/file\/.+$/)) {
+      loadFile();
+    }
+  </script>
+</body>
+</html>

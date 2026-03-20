@@ -14,11 +14,12 @@ This guide explains every part of this project from the ground up. No prior expe
 6. [Authentication & Security](#authentication--security)
 7. [Dead Drop — Zero-Knowledge Paste Bin](#dead-drop--zero-knowledge-paste-bin)
 8. [Signal Room — Zero-Knowledge Encrypted Chat](#signal-room--zero-knowledge-encrypted-chat)
-9. [The Admin Panel](#the-admin-panel)
-10. [The API](#the-api)
-11. [Deploying to the Internet](#deploying-to-the-internet)
-12. [Common Tasks](#common-tasks)
-13. [Troubleshooting](#troubleshooting)
+9. [File Drop — Zero-Knowledge Encrypted File Sharing](#file-drop--zero-knowledge-encrypted-file-sharing)
+10. [The Admin Panel](#the-admin-panel)
+11. [The API](#the-api)
+12. [Deploying to the Internet](#deploying-to-the-internet)
+13. [Common Tasks](#common-tasks)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -28,7 +29,8 @@ This is a **self-hosted tools platform** — a web server that hosts privacy-foc
 
 - **Dead Drop** — an anonymous, zero-knowledge encrypted paste bin
 - **Signal Room** — an anonymous, zero-knowledge encrypted ephemeral chat
-- **Admin Panel** — a browser-based control panel for managing drops and settings
+- **File Drop** — an anonymous, zero-knowledge encrypted file sharing service with metadata stripping
+- **Admin Panel** — a browser-based control panel for managing drops, files, and settings
 
 Think of it as a private toolbox running on the internet. The tools are public (anyone with the link can use them), but the admin panel is locked behind authentication. Everything is in-memory — no database, no disk storage, nothing to subpoena or leak.
 
@@ -72,6 +74,7 @@ Proj1/
         ├── landing.html    # Tools index page (public, served at /)
         ├── drop.html       # Dead Drop UI (/drop)
         ├── chat.html       # Signal Room UI (/chat)
+        ├── file.html       # File Drop UI (/file)
         ├── index.html      # Admin panel (/panel)
         └── login.html      # Login page
 ```
@@ -86,7 +89,9 @@ Proj1/
 
 **`src/public/chat.html`** — The Signal Room interface. Creates rooms, connects via WebSocket, encrypts/decrypts messages client-side. All cryptography happens in this file.
 
-**`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, and Settings tabs.
+**`src/public/file.html`** — The File Drop interface. Handles file selection, image metadata stripping via Canvas re-render, encryption of both file content and metadata (filename + type), and decrypted file download. All cryptography happens in this file.
+
+**`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, Files, and Settings tabs.
 
 **`src/public/login.html`** — The admin login page. Submits credentials to `/auth/login` and redirects to `/panel` on success.
 
@@ -162,9 +167,9 @@ Server sends JSON response
 
 Routes are split into three groups:
 
-1. **Public routes** (no auth): `/`, `/drop`, `/drop/:id`, `/chat`, `/chat/:id`, `/api/drop`, `/api/drop/:id`, `/auth/*`, `/login.html`
+1. **Public routes** (no auth): `/`, `/drop`, `/drop/:id`, `/chat`, `/chat/:id`, `/file`, `/file/:id`, `/api/drop`, `/api/drop/:id`, `/api/file`, `/api/file/:id`, `/auth/*`, `/login.html`
 2. **Auth-protected routes**: everything else — admin panel, API endpoints
-3. **Privacy-excluded routes**: drop and chat routes are excluded from request logging
+3. **Privacy-excluded routes**: drop, chat, and file routes are excluded from request logging
 
 ### Middleware
 
@@ -173,13 +178,14 @@ Middleware are functions that run *before* your route handler. The order matters
 2. Security headers (X-Frame-Options, HSTS, etc.)
 3. CSRF origin validation (blocks cross-origin state changes)
 4. Session middleware (so auth can check `req.session`)
-5. Request logger (records the request, skips drop/chat routes)
+5. Request logger (records the request, skips drop/chat/file routes)
 6. Auth middleware blocks unauthenticated access to protected routes
 
 ### In-Memory Architecture
 
 All data lives in JavaScript Maps and arrays:
 - **Pastes** — `Map<id, {encrypted, iv, burnAfterRead, expiresAt, createdAt}>`, max 10,000 entries
+- **Files** — `Map<id, {encrypted, iv, encryptedMeta, metaIv, burnAfterRead, expiresAt, createdAt, size}>`, max 1,000 entries, 500 MB total
 - **Chat rooms** — `Map<roomId, Set<WebSocket>>`, rooms auto-deleted when empty
 - **Request log** — ring buffer array, last 200 entries
 - **Password override** — single string, resets on restart
@@ -211,6 +217,8 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **CSRF origin checking** — state-changing requests validate the Origin header
 - **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, Permissions-Policy, HSTS in production
 - **WebSocket origin validation** — only allowed origins can establish connections
+- **File upload rate limiting** — 20 uploads per IP per hour
+- **Image metadata stripping** — EXIF/GPS/camera data removed client-side via Canvas
 - **scrypt password hashing** with random salt
 - **Timing-safe comparison** (prevents timing attacks)
 - **httpOnly cookies** (JavaScript can't read them)
@@ -315,13 +323,64 @@ Signal Room is an ephemeral chat where the server acts as a dumb relay of cipher
 
 ---
 
+## File Drop — Zero-Knowledge Encrypted File Sharing
+
+File Drop is designed for sharing files where even the server operator cannot see the content, filename, or file type.
+
+### How It Works
+
+```
+┌─ Your Browser ─────────────────────────────────────┐
+│                                                     │
+│  1. Select file                                     │
+│  2. Strip image metadata (EXIF/GPS) via Canvas      │
+│  3. Generate random 256-bit AES key                 │
+│  4. Encrypt file bytes with AES-256-GCM + random IV │
+│  5. Encrypt filename + type separately              │
+│  6. Send ONLY ciphertext to server                  │
+│                                                     │
+└────────────────────┬────────────────────────────────┘
+                     │ POST /api/file { encrypted, iv, encryptedMeta, metaIv }
+                     ▼
+┌─ Server ───────────────────────────────────────────┐
+│                                                     │
+│  Stores ciphertext in memory                        │
+│  Returns file ID                                    │
+│  NEVER sees the key, filename, type, or content     │
+│                                                     │
+└────────────────────┬────────────────────────────────┘
+                     │
+                     ▼
+   URL: /file/abc123#<base64url-encoded-key>
+                      ─────────┬──────────
+                               │
+              The # fragment is NEVER sent to the server
+              Only the link holder can decrypt
+```
+
+### Key Design Decisions
+
+- **In-memory only**: Files are never written to disk. They are lost on server restart.
+- **Key in URL fragment**: Browsers never transmit the `#fragment` portion of a URL to the server.
+- **Encrypted metadata**: The filename and MIME type are encrypted separately — the server has no idea what file was uploaded.
+- **Image metadata stripping**: JPEG, PNG, and WebP images are re-rendered through an HTML Canvas, stripping all EXIF, GPS, camera, and thumbnail metadata before encryption.
+- **No logging on file routes**: No IPs, timestamps, or user agents are recorded.
+- **Burn after download**: The in-memory entry is deleted immediately after one retrieval.
+- **Auto-expiry**: Expired files are cleaned up every 60 seconds.
+- **10 MB limit per file, 500 MB total**: Prevents abuse of in-memory storage.
+- **Upload rate limiting**: 20 uploads per IP per hour.
+- **IV validation**: Both content and metadata IVs are type-checked and length-limited.
+- **Metadata size cap**: Encrypted metadata capped at 4 KB to prevent abuse.
+
+---
+
 ## The Admin Panel
 
-The admin panel at `/panel` is a single-page application with three tabs. All pages use a dark monospace theme.
+The admin panel at `/panel` is a single-page application with four tabs. All pages use a dark monospace theme.
 
 ### Dashboard
 
-- Status cards: uptime, memory, active drops, chat rooms, chat peers
+- Status cards: uptime, memory, active drops, active files, chat rooms, chat peers
 - Live request log (auto-refreshes every 5 seconds)
 - Drop and chat routes are excluded from the log for privacy
 
@@ -331,6 +390,13 @@ The admin panel at `/panel` is a single-page application with three tabs. All pa
 - Table of all drops: ID, status, type, expiry countdown, creation date
 - Actions: delete individual drops, purge all expired
 - Note: admin cannot read drop contents (zero-knowledge)
+
+### Files
+
+- Stats: total, active, expired, burn-on-download counts, total storage
+- Table of all files: ID, status, type, size, expiry countdown, creation date
+- Actions: delete individual files, purge all expired
+- Note: admin cannot read file contents, names, or types (zero-knowledge)
 
 ### Settings
 
@@ -350,6 +416,8 @@ Every endpoint returns JSON.
 |--------|-----|------|-------------|
 | `POST` | `/api/drop` | `{ encrypted, iv, burn?, expiry? }` | Create a drop |
 | `GET` | `/api/drop/:id` | — | Retrieve a drop (burns if flagged) |
+| `POST` | `/api/file` | `{ encrypted, iv, encryptedMeta, metaIv, burn?, expiry? }` | Create a file drop |
+| `GET` | `/api/file/:id` | — | Retrieve a file (burns if flagged) |
 | `POST` | `/auth/login` | `{ username, password }` | Log in (rate limited) |
 | `POST` | `/auth/logout` | — | Log out |
 | `GET` | `/auth/check` | — | Check auth status |
@@ -364,6 +432,10 @@ Every endpoint returns JSON.
 | `GET` | `/api/drops/stats` | Drop statistics |
 | `DELETE` | `/api/drops/:id` | Delete a drop |
 | `POST` | `/api/drops/purge-expired` | Purge expired drops |
+| `GET` | `/api/files` | List files (metadata only) |
+| `GET` | `/api/files/stats` | File statistics |
+| `DELETE` | `/api/files/:id` | Delete a file |
+| `POST` | `/api/files/purge-expired` | Purge expired files |
 | `GET` | `/api/chat/stats` | Chat room/peer counts |
 | `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |

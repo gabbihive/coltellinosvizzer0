@@ -83,6 +83,44 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+// --- In-memory file store ---
+
+const fileStore = new Map(); // id -> { encrypted, iv, encryptedMeta, metaIv, burnAfterRead, expiresAt, createdAt, size }
+const FILE_MAX_SIZE = 14 * 1024 * 1024; // ~10 MB original file in base64 ciphertext
+const FILE_MAX_COUNT = 1000;
+const FILE_MAX_TOTAL_SIZE = 500 * 1024 * 1024; // 500 MB total
+let filesTotalSize = 0;
+
+const FILE_EXPIRY_OPTIONS = {
+  '1h': 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+// Periodic cleanup of expired files
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, file] of fileStore) {
+    if (file.expiresAt <= now) {
+      filesTotalSize -= file.size;
+      fileStore.delete(id);
+    }
+  }
+}, 60 * 1000);
+
+// File upload rate limiting (20 per IP per hour)
+const uploadAttempts = new Map(); // ip -> { count, resetAt }
+function checkUploadRate(ip) {
+  const now = Date.now();
+  const attempt = uploadAttempts.get(ip) || { count: 0, resetAt: now + 3600000 };
+  if (now > attempt.resetAt) { attempt.count = 0; attempt.resetAt = now + 3600000; }
+  if (attempt.count >= 20) return false;
+  attempt.count++;
+  uploadAttempts.set(ip, attempt);
+  return true;
+}
+
 // --- Request log (in-memory ring buffer) ---
 
 const requestLog = [];
@@ -91,7 +129,12 @@ const MAX_LOG_ENTRIES = 200;
 // --- Middleware ---
 
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '512kb' }));
+const jsonSmall = express.json({ limit: '512kb' });
+const jsonLarge = express.json({ limit: '15mb' });
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/api/file') return jsonLarge(req, res, next);
+  jsonSmall(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '512kb' }));
 
 // Security headers
@@ -110,8 +153,16 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.get('origin');
+    const referer = req.get('referer');
     const host = req.get('host');
-    if (origin && !origin.includes(host)) {
+    // Extract hostname from origin or referer
+    let sourceHost = null;
+    try {
+      if (origin) sourceHost = new URL(origin).host;
+      else if (referer) sourceHost = new URL(referer).host;
+    } catch {}
+    // Block if we can determine a cross-origin source
+    if (sourceHost && sourceHost !== host) {
       return res.status(403).json({ error: 'Forbidden' });
     }
   }
@@ -134,7 +185,7 @@ app.use(session({
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check' || req.path.startsWith('/drop') || req.path.startsWith('/api/drop') || req.path.startsWith('/chat') || req.path.startsWith('/api/chat')) return;
+    if (req.path.match(/\.(html|css|js|ico|png|svg|woff2?)$/) || req.path === '/auth/check' || req.path.startsWith('/drop') || req.path.startsWith('/api/drop') || req.path.startsWith('/chat') || req.path.startsWith('/api/chat') || req.path.startsWith('/file') || req.path.startsWith('/api/file')) return;
     requestLog.unshift({
       time: new Date().toISOString(),
       method: req.method,
@@ -254,6 +305,7 @@ app.post('/api/drop', (req, res) => {
 });
 
 app.get('/api/drop/:id', (req, res) => {
+  if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
   const paste = pastes.get(req.params.id);
   if (!paste || paste.expiresAt <= Date.now()) {
     if (paste) pastes.delete(req.params.id);
@@ -263,6 +315,75 @@ app.get('/api/drop/:id', (req, res) => {
     pastes.delete(req.params.id);
   }
   res.json({ encrypted: paste.encrypted, iv: paste.iv, burn: paste.burnAfterRead });
+});
+
+// --- File Drop (encrypted file sharing) ---
+
+app.get('/file', (req, res) => res.sendFile(path.join(__dirname, 'public', 'file.html')));
+app.get('/file/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'file.html')));
+
+app.post('/api/file', (req, res) => {
+  if (!checkUploadRate(req.ip)) {
+    return res.status(429).json({ error: 'Upload limit exceeded. Try again later.' });
+  }
+  const { encrypted, iv, encryptedMeta, metaIv, burn, expiry } = req.body;
+  if (!encrypted || !iv || !encryptedMeta || !metaIv) {
+    return res.status(400).json({ error: 'Missing encrypted data' });
+  }
+  if (typeof encrypted !== 'string' || typeof iv !== 'string' || typeof encryptedMeta !== 'string' || typeof metaIv !== 'string') {
+    return res.status(400).json({ error: 'Invalid field types' });
+  }
+  if (iv.length > 24 || metaIv.length > 24) {
+    return res.status(400).json({ error: 'Invalid IV' });
+  }
+  if (encrypted.length > FILE_MAX_SIZE) {
+    return res.status(413).json({ error: 'File too large (10 MB max)' });
+  }
+  if (encryptedMeta.length > 4096) {
+    return res.status(400).json({ error: 'Metadata too large' });
+  }
+  if (fileStore.size >= FILE_MAX_COUNT) {
+    return res.status(503).json({ error: 'Server at capacity. Try again later.' });
+  }
+  const size = encrypted.length + encryptedMeta.length;
+  if (filesTotalSize + size > FILE_MAX_TOTAL_SIZE) {
+    return res.status(503).json({ error: 'Storage full. Try again later.' });
+  }
+  const ttl = FILE_EXPIRY_OPTIONS[expiry] || FILE_EXPIRY_OPTIONS['24h'];
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  fileStore.set(id, {
+    encrypted, iv, encryptedMeta, metaIv,
+    burnAfterRead: !!burn,
+    expiresAt: now + ttl,
+    createdAt: now,
+    size,
+  });
+  filesTotalSize += size;
+  res.status(201).json({ id });
+});
+
+app.get('/api/file/:id', (req, res) => {
+  if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+  const file = fileStore.get(req.params.id);
+  if (!file || file.expiresAt <= Date.now()) {
+    if (file) {
+      filesTotalSize -= file.size;
+      fileStore.delete(req.params.id);
+    }
+    return res.status(404).json({ error: 'File not found or expired' });
+  }
+  if (file.burnAfterRead) {
+    filesTotalSize -= file.size;
+    fileStore.delete(req.params.id);
+  }
+  res.json({
+    encrypted: file.encrypted,
+    iv: file.iv,
+    encryptedMeta: file.encryptedMeta,
+    metaIv: file.metaIv,
+    burn: file.burnAfterRead,
+  });
 });
 
 // Everything else requires auth
@@ -344,6 +465,7 @@ app.get('/api/drops/stats', (req, res) => {
 });
 
 app.delete('/api/drops/:id', (req, res) => {
+  if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
   if (!pastes.has(req.params.id)) {
     return res.status(404).json({ error: 'Drop not found' });
   }
@@ -356,6 +478,60 @@ app.post('/api/drops/purge-expired', (req, res) => {
   let purged = 0;
   for (const [id, p] of pastes) {
     if (p.expiresAt <= now) { pastes.delete(id); purged++; }
+  }
+  res.json({ purged });
+});
+
+// --- API: Files (admin) ---
+
+app.get('/api/files', (req, res) => {
+  const now = Date.now();
+  const items = [];
+  for (const [id, f] of fileStore) {
+    items.push({
+      id,
+      burnAfterRead: f.burnAfterRead,
+      expiresAt: new Date(f.expiresAt).toISOString(),
+      createdAt: new Date(f.createdAt).toISOString(),
+      expired: f.expiresAt <= now,
+      size: f.size,
+    });
+  }
+  items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(items.slice(0, 100));
+});
+
+app.get('/api/files/stats', (req, res) => {
+  const now = Date.now();
+  let total = 0, active = 0, burn = 0;
+  for (const f of fileStore.values()) {
+    total++;
+    if (f.expiresAt > now) {
+      active++;
+      if (f.burnAfterRead) burn++;
+    }
+  }
+  res.json({ total, active, expired: total - active, burn, totalSize: filesTotalSize });
+});
+
+app.delete('/api/files/:id', (req, res) => {
+  if (!/^[a-f0-9-]{36}$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+  const file = fileStore.get(req.params.id);
+  if (!file) return res.status(404).json({ error: 'File not found' });
+  filesTotalSize -= file.size;
+  fileStore.delete(req.params.id);
+  res.status(204).end();
+});
+
+app.post('/api/files/purge-expired', (req, res) => {
+  const now = Date.now();
+  let purged = 0;
+  for (const [id, f] of fileStore) {
+    if (f.expiresAt <= now) {
+      filesTotalSize -= f.size;
+      fileStore.delete(id);
+      purged++;
+    }
   }
   res.json({ purged });
 });

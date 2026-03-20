@@ -196,6 +196,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="dashboard">Dashboard</button>
     <button class="tab" data-tab="drops">Drops</button>
+    <button class="tab" data-tab="files">Files</button>
     <button class="tab" data-tab="settings">Settings</button>
   </nav>
 
@@ -215,6 +216,10 @@
         <div class="card">
           <div class="label">Active Drops</div>
           <div class="value" id="dropCount">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Active Files</div>
+          <div class="value" id="fileCount">--</div>
         </div>
         <div class="card">
           <div class="label">Chat Rooms</div>
@@ -282,6 +287,54 @@
           Drops are end-to-end encrypted and stored in memory only.
           The server holds only ciphertext &mdash; only the link holder has the key.
           Drops are lost on server restart. Admin actions: delete individual drops or purge all expired ones.
+        </p>
+      </div>
+    </div>
+
+    <!-- FILES -->
+    <div id="tab-files" class="tab-content">
+      <div class="cards">
+        <div class="card">
+          <div class="label">Total Files</div>
+          <div class="value" id="filesTotal">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Active</div>
+          <div class="value" id="filesActive">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Expired</div>
+          <div class="value" id="filesExpired">--</div>
+        </div>
+        <div class="card">
+          <div class="label">Storage</div>
+          <div class="value" id="filesStorage">--</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>All Files</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-danger" onclick="purgeExpiredFiles()">Purge Expired</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>ID</th><th>Status</th><th>Type</th><th>Size</th><th>Expires</th><th>Created</th>
+            <th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody id="fileTableBody">
+            <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section" style="padding:16px;">
+        <p style="font-size:11px;color:#333;line-height:1.6;">
+          Files are end-to-end encrypted and stored in memory only.
+          The server holds only ciphertext &mdash; filenames, types, and content are all encrypted.
+          Files are lost on server restart. Admin actions: delete individual files or purge all expired ones.
         </p>
       </div>
     </div>
@@ -404,6 +457,7 @@
       const r = {
         dashboard: () => { fetchStatus(); fetchLogs(); },
         drops: () => { fetchDropStats(); fetchDrops(); },
+        files: () => { fetchFileStats(); fetchFiles(); },
         settings: () => { fetchSystem(); },
       };
       if (r[name]) r[name]();
@@ -422,6 +476,11 @@
         const res = await fetch('/api/drops/stats');
         const d = await res.json();
         document.getElementById('dropCount').textContent = d.active;
+      } catch {}
+      try {
+        const res = await fetch('/api/files/stats');
+        const d = await res.json();
+        document.getElementById('fileCount').textContent = d.active;
       } catch {}
       try {
         const res = await fetch('/api/chat/stats');
@@ -515,6 +574,77 @@
         showToast(`Purged ${d.purged} expired drop${d.purged !== 1 ? 's' : ''}`);
         fetchDrops();
         fetchDropStats();
+      } else { showToast('Failed to purge', 'error'); }
+    }
+
+    // ===================== FILES =====================
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function fetchFileStats() {
+      try {
+        const res = await fetch('/api/files/stats');
+        const d = await res.json();
+        document.getElementById('filesTotal').textContent = d.total;
+        document.getElementById('filesActive').textContent = d.active;
+        document.getElementById('filesExpired').textContent = d.expired;
+        document.getElementById('filesStorage').innerHTML = esc(formatFileSize(d.totalSize));
+      } catch {}
+    }
+
+    async function fetchFiles() {
+      try {
+        const res = await fetch('/api/files');
+        const files = await res.json();
+        const tbody = document.getElementById('fileTableBody');
+        if (files.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No files yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = files.map(f => {
+          const status = f.expired
+            ? '<span class="tag tag-expired">expired</span>'
+            : '<span class="tag tag-active">active</span>';
+          const type = f.burnAfterRead
+            ? '<span class="tag tag-burn">burn</span>'
+            : '<span style="color:#444">standard</span>';
+          return `<tr>
+            <td><code>${esc(f.id.slice(0, 8))}&hellip;</code></td>
+            <td>${status}</td>
+            <td>${type}</td>
+            <td style="color:#444">${formatFileSize(f.size)}</td>
+            <td style="color:#444">${f.expired ? 'expired' : timeUntil(f.expiresAt)}</td>
+            <td style="color:#444">${fmtDateTime(f.createdAt)}</td>
+            <td><div class="cell-actions">
+              <button class="btn btn-sm btn-danger" onclick="deleteFile('${esc(f.id)}')">Delete</button>
+            </div></td>
+          </tr>`;
+        }).join('');
+      } catch {}
+    }
+
+    async function deleteFile(id) {
+      if (!confirm('Delete this file?')) return;
+      const res = await fetch('/api/files/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('File deleted');
+        fetchFiles();
+        fetchFileStats();
+      } else { showToast('Failed to delete', 'error'); }
+    }
+
+    async function purgeExpiredFiles() {
+      if (!confirm('Purge all expired files?')) return;
+      const res = await fetch('/api/files/purge-expired', { method: 'POST' });
+      if (res.ok) {
+        const d = await res.json();
+        showToast(`Purged ${d.purged} expired file${d.purged !== 1 ? 's' : ''}`);
+        fetchFiles();
+        fetchFileStats();
       } else { showToast('Failed to purge', 'error'); }
     }
 
