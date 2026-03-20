@@ -392,6 +392,49 @@
   <footer>no logs &middot; no storage &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
+    // --- Security hardening ---
+
+    if (!crypto?.subtle) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
+      throw new Error('Web Crypto unavailable');
+    }
+    (function() {
+      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      if (t.every(b => b === 0)) {
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        throw new Error('RNG failure');
+      }
+    })();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+
+    try { localStorage.clear(); sessionStorage.clear(); } catch {}
+    try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
+
+    function safeCopy(text) {
+      return navigator.clipboard.writeText(text).then(() => {
+        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+      });
+    }
+
+    function chatCleanup() {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+      ws = null;
+      cryptoKey = null;
+      myPeerId = null;
+      const msgs = document.getElementById('messages');
+      if (msgs) msgs.innerHTML = '';
+      const input = document.getElementById('msgInput');
+      if (input) { input.value = ''; }
+      const urlText = document.getElementById('resultUrlText');
+      if (urlText) urlText.textContent = '';
+      navigator.clipboard.writeText('').catch(() => {});
+    }
+    window.addEventListener('pagehide', chatCleanup);
+    // No visibilitychange cleanup for chat — user switching tabs should not kill the session
+
     const createView = document.getElementById('createView');
     const chatView = document.getElementById('chatView');
     const errorView = document.getElementById('errorView');
@@ -496,10 +539,10 @@
       document.getElementById('roomLink').classList.remove('hidden');
 
       document.getElementById('resultUrl').addEventListener('click', () => {
-        navigator.clipboard.writeText(url).then(() => {
+        safeCopy(url).then(() => {
           const hint = document.querySelector('.copy-hint');
-          hint.textContent = 'copied';
-          setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+          hint.textContent = 'copied (auto-clears 30s)';
+          setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
         });
       });
 
@@ -515,6 +558,9 @@
 
       const roomId = match[1];
       const keyStr = location.hash.slice(1);
+
+      // Strip key from URL bar and history immediately
+      if (location.hash) history.replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The encryption key was not found in the URL. The link may be incomplete.');
@@ -532,12 +578,13 @@
       chatView.classList.remove('hidden');
       document.getElementById('roomIdDisplay').textContent = roomId;
 
-      // Copy link button
+      // Copy link button (reconstruct full URL since hash was stripped from history)
+      const fullRoomUrl = `${location.origin}/chat/${roomId}#${keyStr}`;
       document.getElementById('copyLinkBtn').addEventListener('click', () => {
-        navigator.clipboard.writeText(location.href).then(() => {
+        safeCopy(fullRoomUrl).then(() => {
           const btn = document.getElementById('copyLinkBtn');
-          btn.textContent = 'Copied';
-          setTimeout(() => { btn.textContent = 'Copy link'; }, 2000);
+          btn.textContent = 'Copied (auto-clears 30s)';
+          setTimeout(() => { btn.textContent = 'Copy link'; }, 3000);
         });
       });
 

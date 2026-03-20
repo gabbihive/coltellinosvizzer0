@@ -352,6 +352,68 @@
   <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
+    // --- Security hardening ---
+
+    // Verify crypto availability
+    if (!crypto?.subtle) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
+      throw new Error('Web Crypto unavailable');
+    }
+    (function() {
+      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      if (t.every(b => b === 0)) {
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        throw new Error('RNG failure');
+      }
+    })();
+
+    // Unregister any service workers (prevent persistent compromise)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+
+    // Nuke client-side storage (hostile to persistent exfiltration)
+    try { localStorage.clear(); sessionStorage.clear(); } catch {}
+    try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
+
+    // Memory wipe utility
+    function wipeBuffer(buf) {
+      if (buf instanceof ArrayBuffer) new Uint8Array(buf).fill(0);
+      else if (buf?.buffer) buf.fill(0);
+    }
+
+    // Clipboard auto-clear after copy
+    function safeCopy(text) {
+      return navigator.clipboard.writeText(text).then(() => {
+        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+      });
+    }
+
+    // Page lifecycle cleanup
+    let _cryptoKey = null;
+    function cleanup() {
+      // Wipe textarea
+      const ta = document.getElementById('content');
+      if (ta && ta.value) { ta.value = '\0'.repeat(ta.value.length); ta.value = ''; }
+      // Wipe displayed content
+      const rc = document.getElementById('readContent');
+      if (rc) rc.textContent = '';
+      const ru = document.getElementById('resultUrlText');
+      if (ru) ru.textContent = '';
+      // Null out keys
+      _cryptoKey = null;
+      // Clear clipboard
+      navigator.clipboard.writeText('').catch(() => {});
+    }
+    window.addEventListener('pagehide', cleanup);
+    // On tab switch, only clear compose inputs (not displayed content or active sessions)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        const ta = document.getElementById('content');
+        if (ta && ta.value) { ta.value = ''; }
+      }
+    });
+
     const composeView = document.getElementById('composeView');
     const readView = document.getElementById('readView');
     const errorView = document.getElementById('errorView');
@@ -467,19 +529,19 @@
 
     document.getElementById('resultUrl').addEventListener('click', () => {
       const url = document.getElementById('resultUrlText').textContent;
-      navigator.clipboard.writeText(url).then(() => {
+      safeCopy(url).then(() => {
         const hint = document.querySelector('.copy-hint');
-        hint.textContent = 'copied';
-        setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+        hint.textContent = 'copied (auto-clears 30s)';
+        setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
       });
     });
 
     document.getElementById('copyContentBtn').addEventListener('click', () => {
       const text = document.getElementById('readContent').textContent;
-      navigator.clipboard.writeText(text).then(() => {
+      safeCopy(text).then(() => {
         const btn = document.getElementById('copyContentBtn');
-        btn.textContent = 'Copied';
-        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000);
+        btn.textContent = 'Copied (auto-clears 30s)';
+        setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 3000);
       });
     });
 
@@ -491,6 +553,9 @@
 
       const id = match[1];
       const keyStr = location.hash.slice(1);
+
+      // Strip key from URL bar and history immediately
+      if (location.hash) history.replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');

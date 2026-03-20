@@ -417,6 +417,58 @@
   <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
 
   <script>
+    // --- Security hardening ---
+
+    if (!crypto?.subtle) {
+      document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Web Crypto API unavailable. Use HTTPS and a modern browser.</p>';
+      throw new Error('Web Crypto unavailable');
+    }
+    (function() {
+      const t = new Uint8Array(32); crypto.getRandomValues(t);
+      if (t.every(b => b === 0)) {
+        document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">CSPRNG failure. This browser is not safe.</p>';
+        throw new Error('RNG failure');
+      }
+    })();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+
+    try { localStorage.clear(); sessionStorage.clear(); } catch {}
+    try { if (indexedDB.databases) indexedDB.databases().then(dbs => dbs.forEach(db => indexedDB.deleteDatabase(db.name))); } catch {}
+
+    function wipeBuffer(buf) {
+      if (buf instanceof ArrayBuffer) new Uint8Array(buf).fill(0);
+      else if (buf?.buffer) buf.fill(0);
+    }
+
+    function safeCopy(text) {
+      return navigator.clipboard.writeText(text).then(() => {
+        setTimeout(() => { navigator.clipboard.writeText('').catch(() => {}); }, 30000);
+      });
+    }
+
+    function fileCleanup() {
+      if (processedBuffer) { wipeBuffer(processedBuffer); processedBuffer = null; }
+      selectedFile = null;
+      if (decryptedBlob) { decryptedBlob = null; }
+      decryptedName = 'download';
+      const urlText = document.getElementById('resultUrlText');
+      if (urlText) urlText.textContent = '';
+      const fi = document.getElementById('fileInput');
+      if (fi) fi.value = '';
+      navigator.clipboard.writeText('').catch(() => {});
+    }
+    window.addEventListener('pagehide', fileCleanup);
+    // On tab switch, only clear file input (not pending downloads)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        const fi = document.getElementById('fileInput');
+        if (fi) fi.value = '';
+      }
+    });
+
     const uploadView = document.getElementById('uploadView');
     const downloadView = document.getElementById('downloadView');
     const errorView = document.getElementById('errorView');
@@ -653,7 +705,8 @@
           document.getElementById('resultWarn').textContent = '';
         }
 
-        // Clear selection
+        // Wipe and clear selection
+        if (processedBuffer) { wipeBuffer(processedBuffer); }
         selectedFile = null;
         processedBuffer = null;
       } catch (err) {
@@ -666,10 +719,10 @@
 
     document.getElementById('resultUrl').addEventListener('click', () => {
       const url = document.getElementById('resultUrlText').textContent;
-      navigator.clipboard.writeText(url).then(() => {
+      safeCopy(url).then(() => {
         const hint = document.querySelector('.copy-hint');
-        hint.textContent = 'copied';
-        setTimeout(() => { hint.textContent = 'click to copy'; }, 2000);
+        hint.textContent = 'copied (auto-clears 30s)';
+        setTimeout(() => { hint.textContent = 'click to copy'; }, 3000);
       });
     });
 
@@ -684,6 +737,9 @@
 
       const id = match[1];
       const keyStr = location.hash.slice(1);
+
+      // Strip key from URL bar and history immediately
+      if (location.hash) history.replaceState(null, '', location.pathname);
 
       if (!keyStr) {
         showError('Missing key', 'The decryption key was not found in the URL. The link may be incomplete.');
@@ -739,7 +795,12 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Revoke immediately and wipe blob reference
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        decryptedBlob = null;
+        decryptedName = 'download';
+      }, 1000);
     });
 
     // Route

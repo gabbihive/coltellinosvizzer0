@@ -81,10 +81,16 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 
 ## Security
 
+### Server-Side
+- **Content-Security-Policy with nonces** — per-request cryptographic nonces block injected scripts
+- **Cross-origin isolation** — COOP, COEP, CORP headers on tool pages prevent cross-origin attacks
+- **Cache-Control no-store** — tool pages and encrypted API responses never cached by browser or proxy
+- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, X-DNS-Prefetch-Control off, HSTS in production
+- **Expanded Permissions-Policy** — camera, microphone, geolocation, display-capture, and all hardware APIs disabled
+- **Server fingerprint removal** — X-Powered-By disabled, generic error responses
 - **Login rate limiting** — 5 attempts per IP per minute
 - **File upload rate limiting** — 20 uploads per IP per hour
-- **CSRF origin checking** on all state-changing requests
-- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, HSTS in production
+- **CSRF origin checking** — URL-parsed host comparison on all state-changing requests
 - **WebSocket origin validation** — only allowed origins can connect
 - **scrypt password hashing** with random salt (env var password hashed at startup)
 - **Timing-safe comparison** (prevents timing attacks)
@@ -92,7 +98,17 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Connection limits** — per-IP (10), global (500), per-room (50), max rooms (1000)
 - **Rate limiting** — 10 WebSocket messages/sec per connection
 - **Allowlist-based env var exposure** in system info API
-- **Image metadata stripping** — EXIF/GPS/camera data removed client-side
+- **ID format validation** — UUID regex on all :id route params
+
+### Client-Side Anti-Forensics
+- **Key fragment stripping** — decryption keys removed from URL bar and browser history via `history.replaceState` immediately after extraction
+- **Clipboard auto-clear** — copied URLs and content automatically wiped from clipboard after 30 seconds
+- **Memory wiping** — ArrayBuffers zeroed after use, crypto key references nulled
+- **Page lifecycle cleanup** — all sensitive data (textarea content, decrypted text, file buffers, WebSocket connections) wiped on page unload
+- **Image metadata stripping** — EXIF/GPS/camera data removed via Canvas re-render before encryption
+- **Service worker prevention** — existing service workers unregistered on page load, `worker-src 'none'` in CSP blocks registration
+- **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
+- **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
 
 ## API
 

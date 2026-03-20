@@ -1,11 +1,13 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
 
 const app = express();
+app.disable('x-powered-by');
 const PORT = process.env.PORT || 3000;
 const startedAt = new Date();
 
@@ -126,6 +128,57 @@ function checkUploadRate(ip) {
 const requestLog = [];
 const MAX_LOG_ENTRIES = 200;
 
+// --- HTML templates with CSP nonce injection ---
+
+const htmlTemplates = {};
+for (const name of ['drop', 'chat', 'file', 'landing', 'login', 'index']) {
+  const filePath = path.join(__dirname, 'public', `${name}.html`);
+  htmlTemplates[name] = fs.readFileSync(filePath, 'utf-8');
+}
+
+const TOOL_ROUTES = new Set(['/drop', '/chat', '/file']);
+const TOOL_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, private, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+function serveWithCSP(templateName, req, res, options = {}) {
+  const nonce = crypto.randomBytes(16).toString('base64');
+  const html = htmlTemplates[templateName].replace(/<script>/g, `<script nonce="${nonce}">`);
+  const host = req.get('host') || 'localhost';
+
+  const cspDirectives = [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}'`,
+    "style-src 'unsafe-inline'",
+    "img-src blob: data:",
+    `connect-src 'self'${options.wss ? ` wss://${host}` : ''}`,
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "worker-src 'none'",
+    "manifest-src 'none'",
+  ];
+
+  res.setHeader('Content-Security-Policy', cspDirectives.join('; '));
+
+  // Anti-caching for tool pages
+  if (options.noCache) {
+    for (const [k, v] of Object.entries(TOOL_CACHE_HEADERS)) res.setHeader(k, v);
+  }
+
+  // Cross-origin isolation for tool pages
+  if (options.isolate) {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  }
+
+  res.type('html').send(html);
+}
+
 // --- Middleware ---
 
 app.set('trust proxy', 1);
@@ -142,7 +195,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), accelerometer=(), gyroscope=(), magnetometer=(), payment=(), usb=(), bluetooth=(), serial=(), hid=(), midi=(), screen-wake-lock=(), idle-detection=(), display-capture=(), document-domain=()');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
@@ -258,24 +313,24 @@ function requireAuth(req, res, next) {
 }
 
 app.get('/panel', (req, res, next) => requireAuth(req, res, () => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  serveWithCSP('index', req, res);
 }));
 
 // Public routes (no auth required)
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
+app.get('/', (req, res) => serveWithCSP('landing', req, res));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
-app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
-app.use('/landing.html', express.static(path.join(__dirname, 'public', 'landing.html')));
+app.get('/login.html', (req, res) => serveWithCSP('login', req, res));
+app.get('/landing.html', (req, res) => serveWithCSP('landing', req, res));
 
 // --- Signal Room (encrypted chat) ---
 
-app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
-app.get('/chat/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
+app.get('/chat', (req, res) => serveWithCSP('chat', req, res, { noCache: true, isolate: true, wss: true }));
+app.get('/chat/:id', (req, res) => serveWithCSP('chat', req, res, { noCache: true, isolate: true, wss: true }));
 
 // --- Dead Drop (anonymous paste bin) ---
 
-app.get('/drop', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
-app.get('/drop/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'drop.html')));
+app.get('/drop', (req, res) => serveWithCSP('drop', req, res, { noCache: true, isolate: true }));
+app.get('/drop/:id', (req, res) => serveWithCSP('drop', req, res, { noCache: true, isolate: true }));
 
 app.post('/api/drop', (req, res) => {
   const { encrypted, iv, burn, expiry } = req.body;
@@ -314,13 +369,14 @@ app.get('/api/drop/:id', (req, res) => {
   if (paste.burnAfterRead) {
     pastes.delete(req.params.id);
   }
+  res.setHeader('Cache-Control', 'no-store');
   res.json({ encrypted: paste.encrypted, iv: paste.iv, burn: paste.burnAfterRead });
 });
 
 // --- File Drop (encrypted file sharing) ---
 
-app.get('/file', (req, res) => res.sendFile(path.join(__dirname, 'public', 'file.html')));
-app.get('/file/:id', (req, res) => res.sendFile(path.join(__dirname, 'public', 'file.html')));
+app.get('/file', (req, res) => serveWithCSP('file', req, res, { noCache: true, isolate: true }));
+app.get('/file/:id', (req, res) => serveWithCSP('file', req, res, { noCache: true, isolate: true }));
 
 app.post('/api/file', (req, res) => {
   if (!checkUploadRate(req.ip)) {
@@ -377,6 +433,7 @@ app.get('/api/file/:id', (req, res) => {
     filesTotalSize -= file.size;
     fileStore.delete(req.params.id);
   }
+  res.setHeader('Cache-Control', 'no-store');
   res.json({
     encrypted: file.encrypted,
     iv: file.iv,
@@ -544,6 +601,19 @@ app.get('/api/chat/stats', (req, res) => {
   let totalClients = 0;
   for (const clients of chatRooms.values()) totalClients += clients.size;
   res.json({ rooms: chatRooms.size, clients: totalClients });
+});
+
+// --- 404 and error handlers ---
+
+app.use((req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  res.status(404).type('html').send('<html><body style="background:#0a0a0a;color:#444;font-family:monospace;padding:60px;text-align:center"><h1>404</h1></body></html>');
+});
+
+app.use((err, req, res, next) => {
+  res.status(500).json({ error: 'Internal error' });
 });
 
 // --- Start ---

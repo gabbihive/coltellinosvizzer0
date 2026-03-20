@@ -213,12 +213,17 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 
 ### Security Features
 
+**Server-side:**
+- **Content-Security-Policy with nonces** — per-request cryptographic nonces block injected scripts; `worker-src 'none'` blocks service worker registration; `form-action 'none'` blocks form hijacking
+- **Cross-origin isolation** — COOP `same-origin`, COEP `require-corp`, CORP `same-origin` on tool pages
+- **Cache-Control no-store** — tool pages and encrypted API responses never cached
+- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, X-DNS-Prefetch-Control off, X-Permitted-Cross-Domain-Policies none, HSTS in production
+- **Expanded Permissions-Policy** — camera, microphone, geolocation, display-capture, and all hardware APIs disabled
+- **Server fingerprint removal** — X-Powered-By disabled, generic error responses
 - **Login rate limiting** — 5 attempts per IP per minute
-- **CSRF origin checking** — state-changing requests validate the Origin header
-- **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, Permissions-Policy, HSTS in production
-- **WebSocket origin validation** — only allowed origins can establish connections
 - **File upload rate limiting** — 20 uploads per IP per hour
-- **Image metadata stripping** — EXIF/GPS/camera data removed client-side via Canvas
+- **CSRF origin checking** — URL-parsed host comparison (not substring) on state-changing requests
+- **WebSocket origin validation** — only allowed origins can establish connections
 - **scrypt password hashing** with random salt
 - **Timing-safe comparison** (prevents timing attacks)
 - **httpOnly cookies** (JavaScript can't read them)
@@ -230,6 +235,17 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **Message rate limiting** — 10 WebSocket messages/sec per connection
 - **8-hour session expiry**
 - **Max password length** (128 chars) to prevent CPU-bound DoS via scrypt
+- **ID format validation** — UUID regex on all :id route params
+
+**Client-side anti-forensics (all tool pages):**
+- **Key fragment stripping** — decryption keys removed from URL bar and browser history via `history.replaceState` immediately after extraction
+- **Clipboard auto-clear** — copied URLs and content automatically wiped from clipboard after 30 seconds
+- **Memory wiping** — ArrayBuffers zeroed after use, crypto key references nulled on page unload
+- **Page lifecycle cleanup** — sensitive data wiped on `pagehide` (tab close / navigation away)
+- **Image metadata stripping** — EXIF/GPS/camera data removed via Canvas re-render before encryption
+- **Service worker prevention** — existing service workers unregistered on load, CSP blocks new registration
+- **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
+- **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
 
 ---
 
