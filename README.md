@@ -2,6 +2,18 @@
 
 Self-hosted secure communicatons platform. Built with Node.js and Express. Fully in-memory — no database.
 
+                                                         
+  ,ad8888ba,               88           88           88  
+ d8"'    `"8b              88           88           ""  
+d8'                        88           88               
+88             ,adPPYYba,  88,dPPYba,   88,dPPYba,   88  
+88      88888  ""     `Y8  88P'    "8a  88P'    "8a  88  
+Y8,        88  ,adPPPPP88  88       d8  88       d8  88  
+ Y8a.    .a88  88,    ,88  88b,   ,a8"  88b,   ,a8"  88  
+  `"Y88888P"   `"8bbdP"Y8  8Y"Ybbd8"'   8Y"Ybbd8"'   88  
+                                                         
+                                                         
+
 ## Tools
 
 ### Dead Drop
