@@ -164,6 +164,16 @@ function checkRoomCreateRate(ip) {
   return true;
 }
 
+// --- Rate limit Map cleanup (prevent unbounded growth from IP rotation) ---
+setInterval(() => {
+  const now = Date.now();
+  for (const map of [loginAttempts, retrievalAttempts, uploadAttempts, roomCreateAttempts]) {
+    for (const [ip, attempt] of map) {
+      if (now > attempt.resetAt) map.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);
+
 // --- Request log (in-memory ring buffer) ---
 
 const requestLog = [];
@@ -269,16 +279,19 @@ app.use((req, res, next) => {
   next();
 });
 
+const SESSION_COOKIE_NAME = '__session';
+const SESSION_COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: 1000 * 60 * 60 * 8,
+};
 app.use(session({
+  name: SESSION_COOKIE_NAME,
   secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 1000 * 60 * 60 * 8,
-  },
+  cookie: SESSION_COOKIE_OPTS,
 }));
 
 // Request logging
@@ -322,7 +335,7 @@ app.post('/auth/login', (req, res) => {
 
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie('connect.sid');
+    res.clearCookie(SESSION_COOKIE_NAME, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' });
     res.json({ ok: true });
   });
 });
@@ -339,8 +352,8 @@ app.post('/auth/change-password', (req, res) => {
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Current and new password are required' });
   }
-  if (newPassword.length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  if (newPassword.length < 12) {
+    return res.status(400).json({ error: 'New password must be at least 12 characters' });
   }
   if (newPassword.length > 128) {
     return res.status(400).json({ error: 'Password too long' });
@@ -769,9 +782,9 @@ app.use((err, req, res, next) => {
 
 // --- Start ---
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const server = require.main === module
+  ? app.listen(PORT, () => { console.log(`Server running on port ${PORT}`); })
+  : require('http').createServer(app);
 
 // --- WebSocket relay for Signal Room ---
 
@@ -789,7 +802,6 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MSG_SIZE });
 // Determine allowed WebSocket origins
 const ALLOWED_WS_ORIGINS = new Set([
   `http://localhost:${PORT}`,
-  'https://server-express-u3tu.onrender.com',
 ]);
 if (process.env.RENDER_EXTERNAL_URL) {
   ALLOWED_WS_ORIGINS.add(process.env.RENDER_EXTERNAL_URL);
@@ -1002,3 +1014,5 @@ setInterval(() => {
     }
   }
 }, 30000);
+
+module.exports = { app, server, ALLOWED_WS_ORIGINS };
