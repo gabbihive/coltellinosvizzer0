@@ -944,10 +944,11 @@ wss.on('connection', (ws, roomId, ip, inviteHash, expiresAt) => {
     if (count <= 1) ipConnections.delete(ip);
     else ipConnections.set(ip, count - 1);
 
-    // Consume invite token permanently (one-time use)
+    // Release invite token so the same user can reconnect
     const roomConfig = registeredRooms.get(roomId);
     if (roomConfig) {
-      roomConfig.invites.delete(inviteHash);
+      const invite = roomConfig.invites.get(inviteHash);
+      if (invite) invite.active = false;
     }
 
     if (room.size === 0) {
