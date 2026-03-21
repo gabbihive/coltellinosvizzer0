@@ -105,6 +105,7 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, X-DNS-Prefetch-Control off, HSTS in production
 - **Expanded Permissions-Policy** — camera, microphone, geolocation, display-capture, and all hardware APIs disabled
 - **Server fingerprint removal** — X-Powered-By disabled, generic error responses
+- **Login credential type validation** — non-string inputs rejected with timing-safe dummy hash (prevents scrypt crash and username enumeration)
 - **Login rate limiting** — 5 attempts per IP per minute
 - **File upload rate limiting** — 20 uploads per IP per hour
 - **CSRF origin checking** — URL-parsed host comparison on all state-changing requests

@@ -226,6 +226,7 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **Security headers** — X-Frame-Options DENY, X-Content-Type-Options nosniff, Referrer-Policy no-referrer, X-DNS-Prefetch-Control off, X-Permitted-Cross-Domain-Policies none, HSTS in production
 - **Expanded Permissions-Policy** — camera, microphone, geolocation, display-capture, and all hardware APIs disabled
 - **Server fingerprint removal** — X-Powered-By disabled, generic error responses
+- **Login credential type validation** — non-string inputs rejected with timing-safe dummy hash (prevents crash and username enumeration)
 - **Login rate limiting** — 5 attempts per IP per minute
 - **File upload rate limiting** — 20 uploads per IP per hour
 - **CSRF origin checking** — URL-parsed host comparison (not substring) on state-changing requests
@@ -404,7 +405,8 @@ File Drop is designed for sharing files where even the server operator cannot se
 ┌─ Your Browser ─────────────────────────────────────┐
 │                                                     │
 │  1. Select file                                     │
-│  2. Strip image metadata (EXIF/GPS) via Canvas      │
+│  2. Strip image metadata (byte-level JPEG/PNG,       │
+│  │  Canvas fallback for other formats)               │
 │  3. Generate random 256-bit AES key                 │
 │  4. Encrypt file bytes with AES-256-GCM + random IV │
 │  5. Encrypt filename + type separately              │
