@@ -189,11 +189,11 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 ## Testing
 
 ```bash
-npm test           # run all 35 tests
+npm test           # run all 73 tests
 npm run test:watch # watch mode (re-runs on file changes)
 ```
 
-Tests cover authentication, Dead Drop CRUD, File Drop CRUD, Signal Room (registration, WebSocket connect/reject, token reconnection, message relay, forward secrecy generation counter), security headers/CSP, and public page access. Uses vitest + supertest.
+Tests cover authentication (5), Dead Drop CRUD (5), File Drop (4), Signal Room (9), security headers (5), public pages (4), rate limiting (1), and adversarial tests: drop abuse (7), file abuse (5), room registration abuse (6), WebSocket abuse (7), auth abuse (7), error handling (4). Plus a login bug fix found by adversarial testing. Uses vitest + supertest.
 
 ## Project Structure
 
@@ -208,7 +208,7 @@ src/
     index.html           # Admin panel (/panel)
     login.html           # Login page
 tests/
-  server.test.js         # Test suite (35 tests)
+  server.test.js         # Test suite (73 tests)
 ```
 
 ## Deploying to Render

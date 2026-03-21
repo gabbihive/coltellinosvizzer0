@@ -71,7 +71,7 @@ Proj1/
 ├── render.yaml             # Deployment config for Render.com
 │
 ├── tests/
-│   └── server.test.js      # Test suite (35 tests)
+│   └── server.test.js      # Test suite (73 tests)
 │
 └── src/
     ├── server.js           # The main application — everything starts here
@@ -565,7 +565,7 @@ No database required. Auto-deploys on push to `main`.
 
 ## Testing
 
-The project has a test suite with 35 tests covering all critical paths.
+The project has a test suite with 73 tests covering happy paths and adversarial abuse scenarios.
 
 ### Running Tests
 
@@ -584,6 +584,12 @@ npm run test:watch # watch mode — re-runs when you save a file
 | Signal Room | 9 | Room registration, WebSocket connect with correct/wrong tokens, reconnection after disconnect, two-peer message relay, forward secrecy generation counter relay, admin kill |
 | Security | 5 | CSP nonces, security headers, cross-origin isolation, cache headers, CSRF |
 | Public pages | 4 | Landing page, tool pages without auth, admin auth gate, limitations disclaimer present |
+| Drop abuse | 7 | Empty body, non-string fields, oversized IV, empty encrypted, invalid expiry fallback, non-existent UUID, path traversal |
+| File abuse | 5 | Missing fields, non-string types, oversized IV/metaIv, oversized metadata, oversized file |
+| Room registration abuse | 6 | Missing fields, XSS in room ID, short/long room ID, invalid access token hash, empty/oversized invite arrays, invalid invite hash format |
+| WebSocket abuse | 7 | Unregistered room, missing tokens, invalid path, missing origin, oversized message (connection kill), malformed JSON/wrong type/missing fields, concurrent invite token |
+| Auth abuse | 7 | Empty body, non-string credentials, short password, oversized password (DoS prevention), wrong current password, invalid admin drop/file IDs, non-existent resource 404 |
+| Error handling | 4 | Authenticated 404 (JSON), unauthenticated API route (401 not 404), unauthenticated page route (302 not 404), malformed JSON body |
 | Rate limiting | 1 | Login attempts capped at 5/min |
 
 ### How the Tests Work
