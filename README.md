@@ -33,6 +33,13 @@ Zero-knowledge encrypted ephemeral chat at `/chat`. Real-time messaging where th
 - **WebSocket relay** — server forwards opaque ciphertext, cannot decrypt anything
 - **Fully ephemeral** — no messages stored anywhere (not even in memory)
 - **No traces** — no logging, no IP tracking, no metadata on chat routes
+- **Room access control** — HKDF-derived access tokens + invite tokens (one concurrent connection per token, reconnectable)
+- **Deterministic rendezvous** — passphrase-based room derivation via PBKDF2/HKDF (no URL sharing needed)
+- **Callsign system** — optional pre-agreed aliases, encrypted in message payload
+- **Participant verification** — SHA-256 safety numbers for out-of-band identity verification
+- **Message padding** — fixed bucket sizes to prevent traffic analysis
+- **24-hour room lifetime** — server-enforced with client countdown
+- **2-minute inactivity timeout** — warning at 90s, auto-disconnect at 120s
 - **Rooms auto-destroy** when the last participant disconnects
 
 ### File Drop
@@ -58,6 +65,7 @@ Authenticated control panel at `/panel` (login at `/login.html`).
 - **Dashboard** — uptime, memory, active drops, active files, chat rooms/peers, request log
 - **Drops** — view/delete encrypted drops, purge expired, stats
 - **Files** — view/delete encrypted files, purge expired, storage stats
+- **Rooms** — list/kill individual Signal Rooms, purge all, connection stats
 - **Settings** — change password, environment variables, system info
 
 ## Local Development
@@ -139,6 +147,7 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 | `GET` | `/api/drop/:id` | Retrieve encrypted drop (deletes if burn-after-read) |
 | `POST` | `/api/file` | Create encrypted file (`{ encrypted, iv, encryptedMeta, metaIv, burn?, expiry? }`) |
 | `GET` | `/api/file/:id` | Retrieve encrypted file (deletes if burn-after-download) |
+| `POST` | `/api/chat/room` | Register a chat room (`{ roomId, accessTokenHash, inviteTokenHashes }`) |
 
 ### Auth
 
@@ -163,6 +172,9 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 | `DELETE` | `/api/files/:id` | Delete a file |
 | `POST` | `/api/files/purge-expired` | Delete all expired files |
 | `GET` | `/api/chat/stats` | Chat room/peer counts |
+| `GET` | `/api/chat/rooms` | List all registered rooms |
+| `DELETE` | `/api/chat/rooms/:id` | Kill a room (disconnect all participants) |
+| `POST` | `/api/chat/rooms/purge` | Purge all rooms |
 | `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |
 

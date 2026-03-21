@@ -91,7 +91,7 @@ Proj1/
 
 **`src/public/file.html`** — The File Drop interface. Handles file selection, image metadata stripping via Canvas re-render, encryption of both file content and metadata (filename + type), and decrypted file download. All cryptography happens in this file.
 
-**`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, Files, and Settings tabs.
+**`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, Files, Rooms, and Settings tabs.
 
 **`src/public/login.html`** — The admin login page. Submits credentials to `/auth/login` and redirects to `/panel` on success.
 
@@ -187,6 +187,7 @@ All data lives in JavaScript Maps and arrays:
 - **Pastes** — `Map<id, {encrypted, iv, burnAfterRead, expiresAt, createdAt}>`, max 10,000 entries
 - **Files** — `Map<id, {encrypted, iv, encryptedMeta, metaIv, burnAfterRead, expiresAt, createdAt, size}>`, max 1,000 entries, 500 MB total
 - **Chat rooms** — `Map<roomId, Set<WebSocket>>`, rooms auto-deleted when empty
+- **Registered rooms** — `Map<roomId, {accessTokenHash, invites, createdAt, expiresAt}>`, max 1,000 rooms, 24h lifetime
 - **Request log** — ring buffer array, last 200 entries
 - **Password override** — single string, resets on restart
 
@@ -342,13 +343,36 @@ Signal Room is an ephemeral chat where the server acts as a dumb relay of cipher
 └─────────────────────────────────────────────────────┘
 ```
 
+### Room Access Control
+
+Signal Room uses a multi-layer access control system:
+
+1. **Room registration** — rooms must be registered via `POST /api/chat/room` before anyone can connect. This sets up the access token hash and invite token hashes.
+2. **Access tokens** — HKDF-derived from the encryption key. Proves the connector possesses the key without revealing it. SHA-256 hashed and verified with `crypto.timingSafeEqual`.
+3. **Invite tokens** — each token grants one concurrent connection. Tokens are released on disconnect so users can reconnect after network drops. For pre-defined rooms, invite URLs contain the token. For rendezvous rooms, tokens are deterministically derived from the passphrase.
+
+### Deterministic Rendezvous
+
+For situations where sharing URLs is impractical (e.g., pre-arranged meetups), members can derive the same room from a shared passphrase:
+
+1. Passphrase + sequence number → PBKDF2 (600,000 iterations) → master key
+2. Master key → HKDF → room ID, encryption key, and invite tokens
+3. All members with the same passphrase + sequence number arrive at the same encrypted room
+4. If a room is compromised, increment the sequence number to get a fresh room
+
 ### Key Design Decisions
 
 - **No storage at all**: Messages exist only in transit. The server never buffers them.
 - **Rooms auto-destroy**: When the last participant disconnects, the room is deleted.
+- **24-hour room lifetime**: Server-enforced maximum, with client countdown display.
+- **2-minute inactivity timeout**: Warning at 90 seconds, auto-disconnect and wipe at 120 seconds.
 - **Anonymous peer IDs**: 4-hex-char random IDs, no usernames or accounts.
+- **Callsign system**: Optional pre-agreed aliases encrypted in the message payload.
+- **Participant verification**: SHA-256 safety numbers derived from the encryption key for out-of-band verification.
+- **Message padding**: Messages padded to fixed bucket sizes (128–32768 bytes) to prevent traffic analysis.
 - **Rate limiting**: 10 messages/second per connection.
 - **Connection limits**: 50 per room, 10 per IP, 500 globally, 1000 max rooms.
+- **Room creation rate limiting**: 10 rooms per IP per hour.
 - **Origin validation**: Only allowed origins can connect via WebSocket.
 
 ---
@@ -406,7 +430,7 @@ File Drop is designed for sharing files where even the server operator cannot se
 
 ## The Admin Panel
 
-The admin panel at `/panel` is a single-page application with four tabs. All pages use a dark monospace theme.
+The admin panel at `/panel` is a single-page application with five tabs. All pages use a dark monospace theme.
 
 ### Dashboard
 
@@ -428,6 +452,13 @@ The admin panel at `/panel` is a single-page application with four tabs. All pag
 - Actions: delete individual files, purge all expired
 - Note: admin cannot read file contents, names, or types (zero-knowledge)
 
+### Rooms
+
+- Stats: registered rooms, active rooms, connected peers
+- Table of all rooms: room ID, status (active/expired), connected peers, invites remaining, expiry countdown, creation date
+- Actions: kill individual rooms (disconnects all participants), purge all rooms
+- Note: admin cannot read message contents (zero-knowledge)
+
 ### Settings
 
 - Change admin password (resets on restart)
@@ -448,6 +479,7 @@ Every endpoint returns JSON.
 | `GET` | `/api/drop/:id` | — | Retrieve a drop (burns if flagged) |
 | `POST` | `/api/file` | `{ encrypted, iv, encryptedMeta, metaIv, burn?, expiry? }` | Create a file drop |
 | `GET` | `/api/file/:id` | — | Retrieve a file (burns if flagged) |
+| `POST` | `/api/chat/room` | `{ roomId, accessTokenHash, inviteTokenHashes }` | Register a chat room |
 | `POST` | `/auth/login` | `{ username, password }` | Log in (rate limited) |
 | `POST` | `/auth/logout` | — | Log out |
 | `GET` | `/auth/check` | — | Check auth status |
@@ -467,6 +499,9 @@ Every endpoint returns JSON.
 | `DELETE` | `/api/files/:id` | Delete a file |
 | `POST` | `/api/files/purge-expired` | Purge expired files |
 | `GET` | `/api/chat/stats` | Chat room/peer counts |
+| `GET` | `/api/chat/rooms` | List all registered rooms |
+| `DELETE` | `/api/chat/rooms/:id` | Kill a room (disconnect all) |
+| `POST` | `/api/chat/rooms/purge` | Purge all rooms |
 | `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |
 
@@ -553,4 +588,4 @@ The drop expired, was burned, or the server restarted (all drops are in-memory).
 Check browser console (F12). Likely a 401 (session expired).
 
 ### Chat says "disconnected"
-The WebSocket connection was lost. This happens on server restart or network issues. Create a new room.
+The WebSocket connection was lost. This happens on server restart or network issues. Reconnecting with the same invite token works — tokens are released on disconnect. For rendezvous rooms, re-entering the same passphrase and sequence number will reconnect you.
