@@ -390,6 +390,23 @@
             9. No IP addresses, no cookies, no user agents, no analytics are recorded for file drops
           </div>
         </details>
+        <details>
+          <summary>Limitations</summary>
+          <div class="detail">
+            Client-side encryption protects your data from the server operator,
+            network observers, and casual forensics. It cannot protect against:<br><br>
+            &bull; A compromised device (malware, keyloggers, screen capture)<br>
+            &bull; A compromised browser (malicious extensions with page access)<br>
+            &bull; Physical access to an unlocked device<br>
+            &bull; Browser vulnerabilities or zero-day exploits<br><br>
+            This tool performs runtime integrity checks to detect common
+            tampering, but these checks run in the same environment they
+            are trying to verify &mdash; a fundamental limitation of
+            client-side security. For high-risk situations, use a trusted
+            device with a minimal browser profile (no extensions) and a
+            verified OS.
+          </div>
+        </details>
       </div>
     </div>
 
@@ -445,13 +462,31 @@
     const _createObjectURL = _bind.call(URL.createObjectURL, URL);
     const _revokeObjectURL = _bind.call(URL.revokeObjectURL, URL);
 
+    // Capture String.prototype.indexOf before any tampering (used by all integrity checks)
+    const _indexOf = String.prototype.indexOf;
+
+    // Bootstrap self-check: verify toString and call are genuine
+    (function() {
+      const s = _call.call(_toString, _toString);
+      if (_call.call(_indexOf, s, '[native code]') === -1) {
+        document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime detected.'; document.body.appendChild(p);
+        throw new Error('Tampered: toString');
+      }
+      const c = _call.call(_toString, _call);
+      if (_call.call(_indexOf, c, '[native code]') === -1) {
+        document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime detected.'; document.body.appendChild(p);
+        throw new Error('Tampered: call');
+      }
+    })();
+
     function _assertNative(fn, name) {
       const s = _call.call(_toString, fn);
-      if (!s.includes('[native code]')) {
+      if (_call.call(_indexOf, s, '[native code]') === -1) {
         document.body.textContent = ''; const p = document.createElement('p'); p.style.cssText = 'color:#8c4a4a;padding:40px;font-family:monospace'; p.textContent = 'Tampered runtime: ' + name; document.body.appendChild(p);
         throw new Error('Tampered: ' + name);
       }
     }
+    _assertNative(_freeze, 'Object.freeze');
     _assertNative(crypto.subtle.generateKey, 'generateKey');
     _assertNative(crypto.subtle.encrypt, 'encrypt');
     _assertNative(crypto.subtle.decrypt, 'decrypt');
@@ -468,6 +503,9 @@
       document.body.innerHTML = '<p style="color:#8c4a4a;padding:40px;font-family:monospace">Insecure context. HTTPS required.</p>';
       throw new Error('Insecure context');
     }
+
+    _freeze(crypto.subtle);
+    _freeze(crypto);
 
     _freeze(Object.prototype);
     _freeze(Array.prototype);

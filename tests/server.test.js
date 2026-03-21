@@ -538,6 +538,14 @@ describe('Public pages', () => {
     const res = await request(app).get('/panel');
     expect([302, 401]).toContain(res.status);
   });
+
+  it('includes limitations disclaimer on tool pages', async () => {
+    for (const path of ['/drop', '/chat', '/file']) {
+      const res = await request(app).get(path);
+      expect(res.text).toContain('Limitations');
+      expect(res.text).toContain('cannot protect against');
+    }
+  });
 });
 
 // ================================================================

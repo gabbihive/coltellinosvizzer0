@@ -125,13 +125,16 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Memory wiping** — ArrayBuffers zeroed after use, crypto key references nulled
 - **Page lifecycle cleanup** — all sensitive data (textarea content, decrypted text, file buffers, WebSocket connections) wiped on page unload
 - **Image metadata stripping** — byte-level JPEG/PNG stripping (APP segments, non-critical chunks), Canvas fallback for other formats, magic-byte detection (not extension-based)
+- **Honest threat model disclaimer** — each tool page includes a "Limitations" section explaining what client-side encryption cannot protect against
 - **Service worker prevention** — existing service workers unregistered on page load, `worker-src 'none'` in CSP blocks registration
 - **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
 - **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
 
 ### Runtime Integrity Hardening
+- **Bootstrap self-check** — `Function.prototype.toString` is called on itself to verify it has not been replaced before any other integrity checks run; `Function.prototype.call` is verified the same way
 - **Frozen built-in references** — all critical browser APIs (`crypto.subtle`, `fetch`, `btoa`/`atob`, `TextEncoder`/`TextDecoder`, `WebSocket`, `URL.createObjectURL`) captured at script start and used via frozen references, preventing monkey-patching by malicious extensions or injected scripts
-- **Native function integrity checks** — `Function.prototype.toString` verification on all security-critical functions; page refuses to operate if any API has been tampered with
+- **Native function integrity checks** — `Function.prototype.toString` verification on all security-critical functions including `Object.freeze`; page refuses to operate if any API has been tampered with
+- **Frozen crypto objects** — `crypto` and `crypto.subtle` are frozen after integrity checks, preventing post-load reassignment of crypto methods
 - **Secure context enforcement** — `isSecureContext` check blocks execution on non-HTTPS connections (localhost allowed for development)
 - **Prototype pollution prevention** — `Object.freeze(Object.prototype)` and `Object.freeze(Array.prototype)` at page load blocks prototype pollution attacks
 - **Strict mode** — all tool page scripts run in strict mode; prototype modification attempts throw `TypeError` instead of silently failing
@@ -186,7 +189,7 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 ## Testing
 
 ```bash
-npm test           # run all 34 tests
+npm test           # run all 35 tests
 npm run test:watch # watch mode (re-runs on file changes)
 ```
 
@@ -205,7 +208,7 @@ src/
     index.html           # Admin panel (/panel)
     login.html           # Login page
 tests/
-  server.test.js         # Test suite (34 tests)
+  server.test.js         # Test suite (35 tests)
 ```
 
 ## Deploying to Render

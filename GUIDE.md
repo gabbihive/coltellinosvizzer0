@@ -71,7 +71,7 @@ Proj1/
 ├── render.yaml             # Deployment config for Render.com
 │
 ├── tests/
-│   └── server.test.js      # Test suite (34 tests)
+│   └── server.test.js      # Test suite (35 tests)
 │
 └── src/
     ├── server.js           # The main application — everything starts here
@@ -260,8 +260,10 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 
 These defenses protect against browser extensions, injected scripts, or other code running in the same page context that attempts to intercept sensitive data by monkey-patching browser APIs.
 
+- **Bootstrap self-check** — Before any other integrity check, `Function.prototype.toString` is called on *itself* to verify it returns `[native code]`. Same for `Function.prototype.call`. This catches extensions or injected scripts that replace `toString` with a wrapper (which would make all subsequent `_assertNative` checks pass regardless). Not bulletproof — a targeted attacker can special-case the self-check — but it raises the bar from trivial bypass to targeted effort.
 - **Frozen built-in references** — All critical browser APIs (`crypto.subtle.*`, `fetch`, `btoa`/`atob`, `TextEncoder`, `TextDecoder`, `Uint8Array`, `WebSocket`, `URL.createObjectURL`/`revokeObjectURL`, `JSON.parse`/`stringify`, `setTimeout`, `history.replaceState`) are captured into `const` variables at the very first line of the script, before any other code could tamper with them. All subsequent code uses these frozen references exclusively.
-- **Native function integrity checks** — After capturing references, the script verifies each critical function via `Function.prototype.toString.call(fn)` to confirm it contains `[native code]`. If any function has been replaced by a JavaScript wrapper (indicating monkey-patching), the page displays an error and refuses to operate. This catches extensions or injected scripts that replace `crypto.subtle.encrypt` with a wrapper that exfiltrates keys.
+- **Native function integrity checks** — After capturing references, the script verifies each critical function via `Function.prototype.toString.call(fn)` to confirm it contains `[native code]`, including `Object.freeze` itself. If any function has been replaced by a JavaScript wrapper (indicating monkey-patching), the page displays an error and refuses to operate.
+- **Frozen crypto objects** — `crypto` and `crypto.subtle` are frozen after integrity checks, preventing later-loading scripts (injected ads, analytics, compromised extensions) from replacing crypto methods after the page's checks have passed.
 - **Secure context enforcement** — `window.isSecureContext` is checked before any crypto operations. This blocks the page from running over plain HTTP (except localhost for development), preventing man-in-the-middle scenarios where crypto APIs might be unavailable or compromised.
 - **Prototype pollution prevention** — `Object.freeze(Object.prototype)` and `Object.freeze(Array.prototype)` are called at page load. This prevents prototype pollution attacks where an attacker adds malicious properties or methods to `Object.prototype` that would be inherited by all objects (a common attack vector in JavaScript).
 - **Strict mode** — All tool page scripts run under `'use strict'`, which means attempts to modify frozen prototypes throw `TypeError` instead of silently failing, making attacks more detectable.
@@ -269,6 +271,12 @@ These defenses protect against browser extensions, injected scripts, or other co
 - **DOM overwrite before clear** — When sensitive content is removed from the DOM (on page unload, or when clearing elements), `secureClearElement()` first overwrites the element's text with random printable ASCII characters, then clears it. This means the browser's internal text buffer is overwritten before deallocation, making simple memory dump analysis harder.
 - **Tight decryption windows** — The sequence of decrypt → render to DOM → zero the source buffer happens in the shortest possible synchronous code path with no intervening `await` or event loop yields. This minimizes the time window during which both the buffer and the DOM string exist simultaneously.
 - **Blob URL lifecycle tracking** — In File Drop, active blob URLs are tracked in a module-level variable and revoked both on a 500ms timer (after download starts) and on page unload. No orphaned blob URLs can persist in memory.
+
+**What these checks do NOT protect against:**
+
+All of the above run in the same JavaScript environment they are trying to verify. A state-level adversary who has compromised the browser itself (modified browser binary, kernel-level keylogger, zero-day exploit) can intercept at a level below what JavaScript can detect. These checks are defense-in-depth: they catch automated tools, naive extensions, injected scripts, and casual tampering. They raise the bar. They do not create an impenetrable barrier. Each tool page includes an honest "Limitations" disclaimer explaining this to users.
+
+For high-risk situations, the actual defenses are operational: use a known-clean device, boot from a live USB, use Tor Browser with no extensions, and verify the page via a second independent device.
 
 ---
 
@@ -557,7 +565,7 @@ No database required. Auto-deploys on push to `main`.
 
 ## Testing
 
-The project has a test suite with 34 tests covering all critical paths.
+The project has a test suite with 35 tests covering all critical paths.
 
 ### Running Tests
 
@@ -575,7 +583,7 @@ npm run test:watch # watch mode — re-runs when you save a file
 | File Drop | 4 | Create, retrieve, burn-after-download, admin delete |
 | Signal Room | 9 | Room registration, WebSocket connect with correct/wrong tokens, reconnection after disconnect, two-peer message relay, forward secrecy generation counter relay, admin kill |
 | Security | 5 | CSP nonces, security headers, cross-origin isolation, cache headers, CSRF |
-| Public pages | 3 | Landing page, tool pages without auth, admin auth gate |
+| Public pages | 4 | Landing page, tool pages without auth, admin auth gate, limitations disclaimer present |
 | Rate limiting | 1 | Login attempts capped at 5/min |
 
 ### How the Tests Work
