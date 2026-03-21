@@ -71,7 +71,7 @@ Proj1/
 ├── render.yaml             # Deployment config for Render.com
 │
 ├── tests/
-│   └── server.test.js      # Test suite (33 tests)
+│   └── server.test.js      # Test suite (34 tests)
 │
 └── src/
     ├── server.js           # The main application — everything starts here
@@ -94,7 +94,7 @@ Proj1/
 
 **`src/public/chat.html`** — The Signal Room interface. Creates rooms, connects via WebSocket, encrypts/decrypts messages client-side. All cryptography happens in this file.
 
-**`src/public/file.html`** — The File Drop interface. Handles file selection, image metadata stripping via Canvas re-render, encryption of both file content and metadata (filename + type), and decrypted file download. All cryptography happens in this file.
+**`src/public/file.html`** — The File Drop interface. Handles file selection, byte-level JPEG/PNG metadata stripping (with Canvas fallback for other image formats), non-image metadata warnings, encryption of both file content and metadata (filename + type), and decrypted file download. All cryptography happens in this file.
 
 **`src/public/index.html`** — The admin panel. A tabbed SPA with Dashboard, Drops, Files, Rooms, and Settings tabs.
 
@@ -251,7 +251,7 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **Clipboard auto-clear** — copied URLs and content automatically wiped from clipboard after 30 seconds
 - **Memory wiping** — ArrayBuffers zeroed after use, crypto key references nulled on page unload
 - **Page lifecycle cleanup** — sensitive data wiped on `pagehide` (tab close / navigation away)
-- **Image metadata stripping** — EXIF/GPS/camera data removed via Canvas re-render before encryption
+- **Image metadata stripping** — byte-level JPEG/PNG stripping (APP segments, non-critical chunks) with Canvas fallback; magic-byte format detection; non-image metadata warnings
 - **Service worker prevention** — existing service workers unregistered on load, CSP blocks new registration
 - **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
 - **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
@@ -371,6 +371,7 @@ For situations where sharing URLs is impractical (e.g., pre-arranged meetups), m
 ### Key Design Decisions
 
 - **No storage at all**: Messages exist only in transit. The server never buffers them.
+- **Forward secrecy**: Symmetric key ratcheting via HKDF chain derivation. Each message uses a new derived key (`key_{n+1} = HKDF(key_n, room-scoped salt)`). Old keys are wiped after a 10-message window. If the current key is compromised, past messages remain protected. Generation counter (`g`) transmitted in cleartext alongside encrypted payload. Max gap capped at 100 to prevent computation DoS.
 - **Rooms auto-destroy**: When the last participant disconnects, the room is deleted.
 - **24-hour room lifetime**: Server-enforced maximum, with client countdown display.
 - **2-minute inactivity timeout**: Warning at 90 seconds, auto-disconnect and wipe at 120 seconds.
@@ -425,7 +426,7 @@ File Drop is designed for sharing files where even the server operator cannot se
 - **In-memory only**: Files are never written to disk. They are lost on server restart.
 - **Key in URL fragment**: Browsers never transmit the `#fragment` portion of a URL to the server.
 - **Encrypted metadata**: The filename and MIME type are encrypted separately — the server has no idea what file was uploaded.
-- **Image metadata stripping**: JPEG, PNG, and WebP images are re-rendered through an HTML Canvas, stripping all EXIF, GPS, camera, and thumbnail metadata before encryption.
+- **Image metadata stripping**: JPEG images are stripped at the byte level (APP0-APP15 and COM segments removed). PNG images are stripped at the byte level (only critical chunks IHDR, PLTE, IDAT, IEND, tRNS kept). Format is detected from magic bytes, not file extension. WebP, BMP, and GIF fall back to Canvas re-render. Non-image files (PDFs, DOCX, video, audio, SVG) display a metadata warning.
 - **No logging on file routes**: No IPs, timestamps, or user agents are recorded.
 - **Burn after download**: The in-memory entry is deleted immediately after one retrieval.
 - **Auto-expiry**: Expired files are cleaned up every 60 seconds.
@@ -556,7 +557,7 @@ No database required. Auto-deploys on push to `main`.
 
 ## Testing
 
-The project has a test suite with 33 tests covering all critical paths.
+The project has a test suite with 34 tests covering all critical paths.
 
 ### Running Tests
 
@@ -572,7 +573,7 @@ npm run test:watch # watch mode — re-runs when you save a file
 | Authentication | 5 | Login, logout, password change (12-char minimum), rate limiting, CSRF blocking |
 | Dead Drop | 5 | Create, retrieve, burn-after-read, size limits, admin delete |
 | File Drop | 4 | Create, retrieve, burn-after-download, admin delete |
-| Signal Room | 8 | Room registration, WebSocket connect with correct/wrong tokens, reconnection after disconnect, two-peer message relay, admin kill |
+| Signal Room | 9 | Room registration, WebSocket connect with correct/wrong tokens, reconnection after disconnect, two-peer message relay, forward secrecy generation counter relay, admin kill |
 | Security | 5 | CSP nonces, security headers, cross-origin isolation, cache headers, CSRF |
 | Public pages | 3 | Landing page, tool pages without auth, admin auth gate |
 | Rate limiting | 1 | Login attempts capped at 5/min |

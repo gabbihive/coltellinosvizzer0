@@ -31,6 +31,7 @@ Zero-knowledge encrypted ephemeral chat at `/chat`. Real-time messaging where th
 - **Client-side AES-256-GCM encryption** — messages encrypted in browser before transmission
 - **Key in URL fragment** — decryption key never leaves your URL bar
 - **WebSocket relay** — server forwards opaque ciphertext, cannot decrypt anything
+- **Forward secrecy** — symmetric key ratcheting via HKDF chain derivation; past messages protected if current key is compromised
 - **Fully ephemeral** — no messages stored anywhere (not even in memory)
 - **No traces** — no logging, no IP tracking, no metadata on chat routes
 - **Room access control** — HKDF-derived access tokens + invite tokens (one concurrent connection per token, reconnectable)
@@ -48,7 +49,9 @@ Zero-knowledge encrypted file sharing at `/file`. Share files anonymously with a
 
 - **Client-side AES-256-GCM encryption** — files encrypted in browser before upload
 - **Key in URL fragment** — decryption key never sent to the server
-- **Automatic EXIF stripping** — image metadata (GPS, camera info, timestamps) removed via Canvas re-render
+- **Byte-level metadata stripping** — JPEG (APP0-APP15, COM segments) and PNG (all non-critical chunks) stripped at the byte level; Canvas fallback for WebP/BMP/GIF
+- **Magic-byte format detection** — file format detected from actual content bytes, not the spoofable file extension
+- **Non-image metadata warnings** — PDFs, Office docs, video, audio, and SVGs flagged with a warning that metadata may be retained
 - **Encrypted metadata** — filename and file type are encrypted separately, server never sees them
 - **Burn after download** — optionally destroy the file after one download
 - **Auto-expiry** — 1 hour, 24 hours, 7 days, or 30 days
@@ -121,7 +124,7 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **Clipboard auto-clear** — copied URLs and content automatically wiped from clipboard after 30 seconds
 - **Memory wiping** — ArrayBuffers zeroed after use, crypto key references nulled
 - **Page lifecycle cleanup** — all sensitive data (textarea content, decrypted text, file buffers, WebSocket connections) wiped on page unload
-- **Image metadata stripping** — EXIF/GPS/camera data removed via Canvas re-render before encryption
+- **Image metadata stripping** — byte-level JPEG/PNG stripping (APP segments, non-critical chunks), Canvas fallback for other formats, magic-byte detection (not extension-based)
 - **Service worker prevention** — existing service workers unregistered on page load, `worker-src 'none'` in CSP blocks registration
 - **Storage lockdown** — localStorage, sessionStorage, and IndexedDB cleared on tool page load
 - **Crypto self-tests** — Web Crypto API and CSPRNG availability verified on page load
@@ -183,11 +186,11 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 ## Testing
 
 ```bash
-npm test           # run all 33 tests
+npm test           # run all 34 tests
 npm run test:watch # watch mode (re-runs on file changes)
 ```
 
-Tests cover authentication, Dead Drop CRUD, File Drop CRUD, Signal Room (registration, WebSocket connect/reject, token reconnection, message relay), security headers/CSP, and public page access. Uses vitest + supertest.
+Tests cover authentication, Dead Drop CRUD, File Drop CRUD, Signal Room (registration, WebSocket connect/reject, token reconnection, message relay, forward secrecy generation counter), security headers/CSP, and public page access. Uses vitest + supertest.
 
 ## Project Structure
 
@@ -202,7 +205,7 @@ src/
     index.html           # Admin panel (/panel)
     login.html           # Login page
 tests/
-  server.test.js         # Test suite (33 tests)
+  server.test.js         # Test suite (34 tests)
 ```
 
 ## Deploying to Render
