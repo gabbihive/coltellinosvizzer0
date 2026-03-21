@@ -108,7 +108,9 @@ Open `http://localhost:3000` — the tools index. Admin panel at `/panel`.
 - **WebSocket origin validation** — only allowed origins can connect
 - **scrypt password hashing** with random salt (env var password hashed at startup)
 - **Timing-safe comparison** (prevents timing attacks)
+- **Generic session cookie name** — `__session` instead of default `connect.sid` (prevents Express fingerprinting)
 - **httpOnly, sameSite lax, secure cookies**
+- **Rate limit Map cleanup** — periodic pruning prevents memory exhaustion via IP rotation
 - **Connection limits** — per-IP (10), global (500), per-room (50), max rooms (1000)
 - **Rate limiting** — 10 WebSocket messages/sec per connection
 - **Allowlist-based env var exposure** in system info API
@@ -178,6 +180,15 @@ All `/api/*` endpoints require authentication except `/api/drop`, `/api/file`, a
 | `GET` | `/api/system` | System info + env vars (allowlisted) |
 | `GET` | `/api/logs` | Request log (last 200) |
 
+## Testing
+
+```bash
+npm test           # run all 33 tests
+npm run test:watch # watch mode (re-runs on file changes)
+```
+
+Tests cover authentication, Dead Drop CRUD, File Drop CRUD, Signal Room (registration, WebSocket connect/reject, token reconnection, message relay), security headers/CSP, and public page access. Uses vitest + supertest.
+
 ## Project Structure
 
 ```
@@ -190,6 +201,8 @@ src/
     file.html            # File Drop UI (/file)
     index.html           # Admin panel (/panel)
     login.html           # Login page
+tests/
+  server.test.js         # Test suite (33 tests)
 ```
 
 ## Deploying to Render

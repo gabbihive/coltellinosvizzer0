@@ -1,4 +1,4 @@
-# server-express — The Complete Guide
+# coltellinosvizzer0 — The Complete Guide
 
 This guide explains every part of this project from the ground up. No prior experience with these tools is assumed — just basic familiarity with JavaScript and the command line.
 
@@ -47,6 +47,8 @@ Think of it as a private toolbox running on the internet. The tools are public (
 | **dotenv** | An env var loader | Reads the `.env` file so you can configure the app without changing code |
 | **express-session** | Session middleware | Keeps the admin logged in between page loads using browser cookies |
 | **nodemon** | A development tool | Auto-restarts the server when you save a file (dev only) |
+| **vitest** | A test framework | Runs the test suite (dev only) |
+| **supertest** | HTTP test library | Makes HTTP requests to Express in tests without starting a server (dev only) |
 
 ### What Are Environment Variables?
 
@@ -67,6 +69,9 @@ Proj1/
 ├── .gitignore              # Tells Git which files to ignore
 ├── package.json            # Project metadata + dependency list
 ├── render.yaml             # Deployment config for Render.com
+│
+├── tests/
+│   └── server.test.js      # Test suite (33 tests)
 │
 └── src/
     ├── server.js           # The main application — everything starts here
@@ -227,6 +232,7 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **WebSocket origin validation** — only allowed origins can establish connections
 - **scrypt password hashing** with random salt
 - **Timing-safe comparison** (prevents timing attacks)
+- **Generic session cookie name** (`__session`) — prevents Express/connect.sid fingerprinting
 - **httpOnly cookies** (JavaScript can't read them)
 - **sameSite: lax** (prevents most CSRF)
 - **secure: true in production** (HTTPS only)
@@ -236,6 +242,8 @@ The `ADMIN_PASSWORD` env var is hashed with scrypt at startup. All comparisons a
 - **Message rate limiting** — 10 WebSocket messages/sec per connection
 - **8-hour session expiry**
 - **Max password length** (128 chars) to prevent CPU-bound DoS via scrypt
+- **Rate limit Map cleanup** — periodic pruning every 5 minutes prevents memory exhaustion from IP rotation attacks
+- **WebSocket origin allowlist from env** — no hardcoded production URLs in source code
 - **ID format validation** — UUID regex on all :id route params
 
 **Client-side anti-forensics (all tool pages):**
@@ -543,6 +551,43 @@ startCommand: npm start
 | `NODE_ENV` | `production` (set in render.yaml) |
 
 No database required. Auto-deploys on push to `main`.
+
+---
+
+## Testing
+
+The project has a test suite with 33 tests covering all critical paths.
+
+### Running Tests
+
+```bash
+npm test           # single run — all tests
+npm run test:watch # watch mode — re-runs when you save a file
+```
+
+### What the Tests Cover
+
+| Category | Tests | What They Verify |
+|----------|-------|-----------------|
+| Authentication | 5 | Login, logout, password change (12-char minimum), rate limiting, CSRF blocking |
+| Dead Drop | 5 | Create, retrieve, burn-after-read, size limits, admin delete |
+| File Drop | 4 | Create, retrieve, burn-after-download, admin delete |
+| Signal Room | 8 | Room registration, WebSocket connect with correct/wrong tokens, reconnection after disconnect, two-peer message relay, admin kill |
+| Security | 5 | CSP nonces, security headers, cross-origin isolation, cache headers, CSRF |
+| Public pages | 3 | Landing page, tool pages without auth, admin auth gate |
+| Rate limiting | 1 | Login attempts capped at 5/min |
+
+### How the Tests Work
+
+The test suite imports `server.js` without starting the HTTP listener (the export detects `require.main !== module`). Tests use `supertest` to make HTTP requests directly to the Express app, and real `WebSocket` connections for Signal Room tests. The test server listens on a random port to avoid conflicts.
+
+The WebSocket tests exercise the full token flow: generate tokens → hash as raw bytes → register room via API → connect WebSocket with access + invite tokens → verify `init` message. This end-to-end coverage caught the hash encoding mismatch bug (server was hashing hex strings instead of raw bytes).
+
+### When to Run Tests
+
+- Before pushing changes to `src/server.js`
+- After modifying authentication, crypto token flows, or API routes
+- After changing CSP or security headers
 
 ---
 
