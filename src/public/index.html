@@ -189,8 +189,8 @@
     <h1><span class="dot"></span> Admin</h1>
     <div class="header-right">
       <span id="clock"></span>
-      <button class="btn btn-sm btn-ghost" onclick="location.href='/'">Tools</button>
-      <button class="btn btn-sm btn-ghost" onclick="logout()">Logout</button>
+      <button class="btn btn-sm btn-ghost" id="toolsBtn">Tools</button>
+      <button class="btn btn-sm btn-ghost" id="logoutBtn">Logout</button>
     </div>
   </header>
 
@@ -270,7 +270,7 @@
         <div class="section-header">
           <h2>All Drops</h2>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-sm btn-danger" onclick="purgeExpired()">Purge Expired</button>
+            <button class="btn btn-sm btn-danger" id="purgeExpiredBtn">Purge Expired</button>
           </div>
         </div>
         <table>
@@ -318,7 +318,7 @@
         <div class="section-header">
           <h2>All Files</h2>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-sm btn-danger" onclick="purgeExpiredFiles()">Purge Expired</button>
+            <button class="btn btn-sm btn-danger" id="purgeExpiredFilesBtn">Purge Expired</button>
           </div>
         </div>
         <table>
@@ -362,7 +362,7 @@
         <div class="section-header">
           <h2>All Rooms</h2>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-sm btn-danger" onclick="purgeAllRooms()">Purge All</button>
+            <button class="btn btn-sm btn-danger" id="purgeAllRoomsBtn">Purge All</button>
           </div>
         </div>
         <table>
@@ -389,7 +389,7 @@
     <div id="tab-settings" class="tab-content">
       <div class="section">
         <div class="section-header"><h2>Change Password</h2></div>
-        <form class="settings-form" id="passwordForm" onsubmit="changePassword(event)">
+        <form class="settings-form" id="passwordForm">
           <label for="currentPassword">Current Password</label>
           <input type="password" id="currentPassword" required autocomplete="current-password">
           <label for="newPassword">New Password <span style="color:#444; font-weight:400; text-transform:none;">(min 8 chars, resets on restart)</span></label>
@@ -596,7 +596,7 @@
             <td style="color:#444">${d.expired ? 'expired' : timeUntil(d.expiresAt)}</td>
             <td style="color:#444">${fmtDateTime(d.createdAt)}</td>
             <td><div class="cell-actions">
-              <button class="btn btn-sm btn-danger" onclick="deleteDrop('${esc(d.id)}')">Delete</button>
+              <button class="btn btn-sm btn-danger" data-action="delete-drop" data-id="${esc(d.id)}">Delete</button>
             </div></td>
           </tr>`;
         }).join('');
@@ -667,7 +667,7 @@
             <td style="color:#444">${f.expired ? 'expired' : timeUntil(f.expiresAt)}</td>
             <td style="color:#444">${fmtDateTime(f.createdAt)}</td>
             <td><div class="cell-actions">
-              <button class="btn btn-sm btn-danger" onclick="deleteFile('${esc(f.id)}')">Delete</button>
+              <button class="btn btn-sm btn-danger" data-action="delete-file" data-id="${esc(f.id)}">Delete</button>
             </div></td>
           </tr>`;
         }).join('');
@@ -728,7 +728,7 @@
             <td style="color:#444">${r.expired ? 'expired' : timeUntil(r.expiresAt)}</td>
             <td style="color:#444">${fmtDateTime(r.createdAt)}</td>
             <td><div class="cell-actions">
-              <button class="btn btn-sm btn-danger" onclick="killRoom('${esc(r.id)}')">Kill</button>
+              <button class="btn btn-sm btn-danger" data-action="kill-room" data-id="${esc(r.id)}">Kill</button>
             </div></td>
           </tr>`;
         }).join('');
@@ -804,6 +804,26 @@
         showToast(data.error || 'Failed', 'error');
       }
     }
+
+    // ===================== EVENT LISTENERS =====================
+
+    document.getElementById('toolsBtn').addEventListener('click', () => { location.href = '/'; });
+    document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('purgeExpiredBtn').addEventListener('click', purgeExpired);
+    document.getElementById('purgeExpiredFilesBtn').addEventListener('click', purgeExpiredFiles);
+    document.getElementById('purgeAllRoomsBtn').addEventListener('click', purgeAllRooms);
+    document.getElementById('passwordForm').addEventListener('submit', changePassword);
+
+    // Event delegation for dynamically-rendered table buttons
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'delete-drop') deleteDrop(id);
+      else if (action === 'delete-file') deleteFile(id);
+      else if (action === 'kill-room') killRoom(id);
+    });
 
     // ===================== INIT =====================
 
