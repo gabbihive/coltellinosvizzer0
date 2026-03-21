@@ -455,7 +455,7 @@
           The server never sees the passphrase &mdash; all keys are derived locally. Nothing is stored.
         </div>
         <label class="input-label" for="passphrase">Shared passphrase</label>
-        <input type="password" id="passphrase" class="text-input" placeholder="Enter pre-agreed passphrase" autocomplete="off" spellcheck="false" style="margin-bottom:12px;">
+        <input type="password" id="passphrase" class="text-input" placeholder="Enter pre-agreed passphrase" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:12px;">
         <div style="display:flex;gap:12px;align-items:flex-end;">
           <div>
             <label class="input-label" for="seqNum">Sequence</label>
@@ -1380,7 +1380,7 @@
     document.getElementById('rendezvousBtn').addEventListener('click', async function() {
       const btn = document.getElementById('rendezvousBtn');
       const passphraseInput = document.getElementById('passphrase');
-      const passphrase = passphraseInput.value;
+      const passphrase = passphraseInput.value.trim();
       const seq = parseInt(document.getElementById('seqNum').value) || 1;
       const memberCount = Math.max(2, Math.min(16, parseInt(document.getElementById('rvMemberCount').value) || 5));
 
