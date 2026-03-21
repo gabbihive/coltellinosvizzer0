@@ -939,7 +939,11 @@ wss.on('connection', (ws, roomId, ip, inviteHash, expiresAt) => {
     if (parsed.type !== 'msg' || !parsed.data || !parsed.iv) return;
 
     // Attach peer ID and broadcast to ALL in room (including sender for confirmation)
-    const relay = JSON.stringify({ type: 'msg', data: parsed.data, iv: parsed.iv, from: peerId });
+    const relayObj = { type: 'msg', data: parsed.data, iv: parsed.iv, from: peerId };
+    if (typeof parsed.g === 'number' && Number.isInteger(parsed.g) && parsed.g >= 0 && parsed.g <= 100000) {
+      relayObj.g = parsed.g;
+    }
+    const relay = JSON.stringify(relayObj);
     for (const peer of room) {
       if (peer.readyState === 1) {
         peer.send(relay);
@@ -1015,4 +1019,4 @@ setInterval(() => {
   }
 }, 30000);
 
-module.exports = { app, server, ALLOWED_WS_ORIGINS };
+module.exports = { app, server, ALLOWED_WS_ORIGINS, roomCreateAttempts };

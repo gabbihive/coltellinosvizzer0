@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 process.env.ADMIN_PASSWORD = 'testpassword12chars';
 process.env.SESSION_SECRET = 'test-session-secret-for-vitest';
 
-const { app, server, ALLOWED_WS_ORIGINS } = await import('../src/server.js');
+const { app, server, ALLOWED_WS_ORIGINS, roomCreateAttempts } = await import('../src/server.js');
 
 // --- Helpers ---
 
@@ -398,11 +398,66 @@ describe('Signal Room', () => {
     wsB.close();
   });
 
-  it('admin can list and kill rooms', async () => {
-    const a = await loginAgent();
-    const { roomId, accessTokenHash, inviteTokenHashes } = makeRoomFixture();
+  it('relays generation counter (g) for forward secrecy', async () => {
+    const opts = wsOpts();
+    const { roomId, accessToken, inviteTokens, accessTokenHash, inviteTokenHashes } = makeRoomFixture();
     await post('/api/chat/room')
       .send({ roomId, accessTokenHash, inviteTokenHashes });
+
+    const wsA = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[0]), opts);
+    await new Promise((resolve) => { wsA.on('message', () => resolve()); });
+
+    const wsB = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[1]), opts);
+    await new Promise((resolve) => { wsB.on('message', () => resolve()); });
+
+    // Test valid generation counter is relayed
+    const msgPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Relay timeout')), 3000);
+      wsA.on('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        if (parsed.type === 'msg') {
+          clearTimeout(timeout);
+          resolve(parsed);
+        }
+      });
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+    wsB.send(JSON.stringify({ type: 'msg', data: 'ct', iv: 'iv', g: 42 }));
+
+    const relayed = await msgPromise;
+    expect(relayed.g).toBe(42);
+    expect(relayed.data).toBe('ct');
+
+    // Test invalid generation counter is not relayed
+    const msgPromise2 = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Relay timeout')), 3000);
+      wsA.on('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        if (parsed.type === 'msg') {
+          clearTimeout(timeout);
+          resolve(parsed);
+        }
+      });
+    });
+
+    wsB.send(JSON.stringify({ type: 'msg', data: 'ct2', iv: 'iv2', g: 'malicious' }));
+
+    const relayed2 = await msgPromise2;
+    expect(relayed2.g).toBeUndefined();
+    expect(relayed2.data).toBe('ct2');
+
+    wsA.close();
+    wsB.close();
+  });
+
+  it('admin can list and kill rooms', async () => {
+    roomCreateAttempts.clear(); // Reset rate limit for this test
+    const a = await loginAgent();
+    const { roomId, accessTokenHash, inviteTokenHashes } = makeRoomFixture();
+    const regRes = await post('/api/chat/room')
+      .send({ roomId, accessTokenHash, inviteTokenHashes });
+    expect(regRes.status).toBe(201);
 
     const listRes = await agentGet(a, '/api/chat/rooms');
     expect(listRes.status).toBe(200);

@@ -787,6 +787,92 @@
     }
 
     // ============================================================
+    // FORWARD SECRECY — SYMMETRIC KEY RATCHET
+    // ============================================================
+
+    const RATCHET_WINDOW = 10;
+    const RATCHET_MAX_GAP = 100;
+    let ratchetBaseBytes = null;        // raw bytes of key_0
+    let ratchetRoomId = null;           // room ID for domain separation
+    let ratchetSendGen = 0;             // generation counter for outgoing messages
+    let ratchetMaxSeen = 0;             // highest generation seen from any peer
+    const ratchetKeyBytes = new Map();  // Map<gen, Uint8Array> — raw key material
+    const ratchetKeyObjs = new Map();   // Map<gen, CryptoKey> — imported AES-GCM keys
+    // Note: CryptoKey objects (ratchetKeyObjs) are opaque browser handles — their
+    // internal key material cannot be explicitly zeroed via JavaScript. Deleting the
+    // Map reference allows GC to reclaim them, but residual bytes may persist in
+    // browser process memory. This is a Web Crypto API limitation, not a code defect.
+
+    async function ratchetDerive(targetGen) {
+      if (targetGen < 0 || targetGen > RATCHET_MAX_GAP + ratchetMaxSeen) {
+        throw new Error('Invalid generation');
+      }
+      if (ratchetKeyBytes.has(targetGen)) return ratchetKeyBytes.get(targetGen);
+
+      // Find highest cached gen <= targetGen to start from
+      let startGen = 0;
+      for (const g of ratchetKeyBytes.keys()) {
+        if (g <= targetGen && g > startGen) startGen = g;
+      }
+
+      let currentBytes = ratchetKeyBytes.get(startGen);
+      if (!currentBytes) throw new Error('Ratchet base missing');
+
+      const encoder = new _TextEncoder();
+      for (let g = startGen + 1; g <= targetGen; g++) {
+        const hkdfKey = await _subtle.importKey('raw', currentBytes, 'HKDF', false, ['deriveBits']);
+        const bits = await _subtle.deriveBits({
+          name: 'HKDF', hash: 'SHA-256',
+          salt: encoder.encode('signal-room-ratchet-' + (ratchetRoomId || '')),
+          info: encoder.encode('ratchet-gen-' + g),
+        }, hkdfKey, 256);
+        const derived = new _Uint8Array(bits);
+        ratchetKeyBytes.set(g, derived);
+        currentBytes = derived;
+      }
+
+      return currentBytes;
+    }
+
+    async function ratchetGetKey(gen) {
+      if (ratchetKeyObjs.has(gen)) return ratchetKeyObjs.get(gen);
+      const raw = await ratchetDerive(gen);
+      const key = await _subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+      ratchetKeyObjs.set(gen, key);
+      return key;
+    }
+
+    function ratchetPrune(currentGen) {
+      const minKeep = Math.max(0, currentGen - RATCHET_WINDOW);
+      for (const g of Array.from(ratchetKeyBytes.keys())) {
+        if (g < minKeep) {
+          wipeBuffer(ratchetKeyBytes.get(g));
+          ratchetKeyBytes.delete(g);
+          ratchetKeyObjs.delete(g);
+        }
+      }
+    }
+
+    function ratchetInit(keyBytes, roomId) {
+      ratchetCleanup();
+      ratchetBaseBytes = new _Uint8Array(keyBytes);
+      ratchetRoomId = roomId || null;
+      ratchetKeyBytes.set(0, new _Uint8Array(keyBytes));
+      ratchetSendGen = 0;
+      ratchetMaxSeen = 0;
+    }
+
+    function ratchetCleanup() {
+      for (const bytes of ratchetKeyBytes.values()) wipeBuffer(bytes);
+      ratchetKeyBytes.clear();
+      ratchetKeyObjs.clear();
+      if (ratchetBaseBytes) { wipeBuffer(ratchetBaseBytes); ratchetBaseBytes = null; }
+      ratchetRoomId = null;
+      ratchetSendGen = 0;
+      ratchetMaxSeen = 0;
+    }
+
+    // ============================================================
     // MESSAGE PADDING
     // ============================================================
 
@@ -1026,6 +1112,7 @@
       if (ws && ws.readyState <= 1) ws.close();
       ws = null;
       cryptoKey = null;
+      ratchetCleanup();
       myPeerId = null;
       myCallsign = null;
       pendingKeyStr = null;
@@ -1187,8 +1274,11 @@
             // Send join announcement
             const joinPayload = { t: 'j' };
             if (myCallsign) joinPayload.c = myCallsign;
-            const { data, iv } = await encryptPadded(joinPayload, cryptoKey);
-            socket.send(_JSON_stringify({ type: 'msg', data, iv }));
+            ratchetSendGen = Math.max(ratchetSendGen, ratchetMaxSeen) + 1;
+            const joinKey = await ratchetGetKey(ratchetSendGen);
+            const { data, iv } = await encryptPadded(joinPayload, joinKey);
+            socket.send(_JSON_stringify({ type: 'msg', data, iv, g: ratchetSendGen }));
+            ratchetPrune(ratchetSendGen);
 
           } else if (msg.type === 'join') {
             document.getElementById('peerCount').textContent = msg.count;
@@ -1205,7 +1295,11 @@
             showError('Room expired', 'This room has reached its 24-hour lifetime. All messages have been wiped.');
 
           } else if (msg.type === 'msg') {
-            const parsed = await decryptPadded(msg.data, msg.iv, cryptoKey);
+            const gen = typeof msg.g === 'number' && msg.g >= 0 ? msg.g : 0;
+            const decryptKey = await ratchetGetKey(gen);
+            const parsed = await decryptPadded(msg.data, msg.iv, decryptKey);
+            if (gen > ratchetMaxSeen) ratchetMaxSeen = gen;
+            ratchetPrune(Math.max(ratchetSendGen, ratchetMaxSeen));
             const isSelf = msg.from === myPeerId;
 
             if (parsed.t === 'j') {
@@ -1271,7 +1365,10 @@
       }
 
       try {
-        cryptoKey = await importKey(keyStr);
+        const keyBytes = base64ToBuf(keyStr);
+        ratchetInit(keyBytes, roomId);
+        cryptoKey = await _subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+        wipeBuffer(keyBytes);
       } catch {
         showError('Invalid key', 'The encryption key is invalid.');
         return;
@@ -1338,8 +1435,11 @@
       try {
         const payload = { t: 'm', x: text };
         if (myCallsign) payload.c = myCallsign;
-        const { data, iv } = await encryptPadded(payload, cryptoKey);
-        ws.send(_JSON_stringify({ type: 'msg', data, iv }));
+        ratchetSendGen = Math.max(ratchetSendGen, ratchetMaxSeen) + 1;
+        const sendKey = await ratchetGetKey(ratchetSendGen);
+        const { data, iv } = await encryptPadded(payload, sendKey);
+        ws.send(_JSON_stringify({ type: 'msg', data, iv, g: ratchetSendGen }));
+        ratchetPrune(ratchetSendGen);
         input.value = '';
         input.focus();
         resetActivity();
