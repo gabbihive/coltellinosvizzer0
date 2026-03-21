@@ -845,7 +845,7 @@ server.on('upgrade', (request, socket, head) => {
     socket.destroy();
     return;
   }
-  const accessHash = crypto.createHash('sha256').update(accessToken).digest('hex');
+  const accessHash = crypto.createHash('sha256').update(Buffer.from(accessToken, 'hex')).digest('hex');
   if (accessHash.length !== roomConfig.accessTokenHash.length ||
       !crypto.timingSafeEqual(Buffer.from(accessHash), Buffer.from(roomConfig.accessTokenHash))) {
     socket.destroy();
@@ -858,7 +858,7 @@ server.on('upgrade', (request, socket, head) => {
     socket.destroy();
     return;
   }
-  const inviteHash = crypto.createHash('sha256').update(inviteToken).digest('hex');
+  const inviteHash = crypto.createHash('sha256').update(Buffer.from(inviteToken, 'hex')).digest('hex');
   const invite = roomConfig.invites.get(inviteHash);
   if (!invite) {
     socket.destroy();
