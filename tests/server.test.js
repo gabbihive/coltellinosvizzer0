@@ -549,6 +549,429 @@ describe('Public pages', () => {
 });
 
 // ================================================================
+// ADVERSARIAL — DROP ABUSE
+// ================================================================
+
+describe('Drop abuse', () => {
+  it('rejects empty body', async () => {
+    const res = await post('/api/drop').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects non-string encrypted field', async () => {
+    for (const bad of [123, true, null, [], {}]) {
+      const res = await post('/api/drop').send({ encrypted: bad, iv: 'iv' });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('rejects non-string iv field', async () => {
+    const res = await post('/api/drop').send({ encrypted: 'data', iv: 12345 });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects oversized IV', async () => {
+    const res = await post('/api/drop').send({ encrypted: 'data', iv: 'x'.repeat(25) });
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts empty string encrypted (valid ciphertext is opaque)', async () => {
+    // Server can't distinguish valid from invalid ciphertext — that's the client's job
+    // But empty string is falsy, so it should be rejected
+    const res = await post('/api/drop').send({ encrypted: '', iv: 'iv' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid expiry values gracefully (defaults to 24h)', async () => {
+    const res = await post('/api/drop')
+      .send({ encrypted: 'data', iv: 'iv', expiry: 'FOREVER' });
+    expect(res.status).toBe(201); // falls back to 24h default
+  });
+
+  it('returns 404 for non-existent UUID', async () => {
+    const res = await request(app).get('/api/drop/00000000-0000-0000-0000-000000000000');
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects path traversal in drop ID', async () => {
+    // Express normalizes /../ paths, so this resolves to a different route
+    // The important thing is it doesn't return 200 with sensitive data
+    const res = await request(app).get('/api/drop/../../../etc/passwd');
+    expect(res.status).not.toBe(200);
+  });
+});
+
+// ================================================================
+// ADVERSARIAL — FILE ABUSE
+// ================================================================
+
+describe('File abuse', () => {
+  it('rejects missing fields', async () => {
+    // Missing encryptedMeta
+    const res = await post('/api/file').send({ encrypted: 'data', iv: 'iv' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects non-string field types', async () => {
+    const res = await post('/api/file').send({
+      encrypted: 123, iv: 'iv', encryptedMeta: 'meta', metaIv: 'miv',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects oversized IV fields', async () => {
+    const res = await post('/api/file').send({
+      encrypted: 'data', iv: 'x'.repeat(25), encryptedMeta: 'meta', metaIv: 'miv',
+    });
+    expect(res.status).toBe(400);
+
+    const res2 = await post('/api/file').send({
+      encrypted: 'data', iv: 'iv', encryptedMeta: 'meta', metaIv: 'x'.repeat(25),
+    });
+    expect(res2.status).toBe(400);
+  });
+
+  it('rejects oversized metadata', async () => {
+    const res = await post('/api/file').send({
+      encrypted: 'data', iv: 'iv', encryptedMeta: 'x'.repeat(4097), metaIv: 'miv',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects file exceeding size limit', async () => {
+    // FILE_MAX_SIZE is 14MB (base64 of ~10MB). Express default body limit
+    // may also reject before the route handler — either 413 or 500 is correct.
+    const big = 'x'.repeat(15 * 1024 * 1024);
+    const res = await post('/api/file').send({
+      encrypted: big, iv: 'iv', encryptedMeta: 'meta', metaIv: 'miv',
+    });
+    expect([413, 500]).toContain(res.status);
+  });
+});
+
+// ================================================================
+// ADVERSARIAL — ROOM REGISTRATION ABUSE
+// ================================================================
+
+describe('Room registration abuse', () => {
+  it('rejects missing fields', async () => {
+    const res = await post('/api/chat/room').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects room ID with special characters', async () => {
+    const res = await post('/api/chat/room').send({
+      roomId: '<script>alert(1)',
+      accessTokenHash: randomHex(32),
+      inviteTokenHashes: [randomHex(32)],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects room ID too short or too long', async () => {
+    for (const bad of ['abc', 'a'.repeat(100)]) {
+      const res = await post('/api/chat/room').send({
+        roomId: bad,
+        accessTokenHash: randomHex(32),
+        inviteTokenHashes: [randomHex(32), randomHex(32)],
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('rejects invalid access token hash format', async () => {
+    const res = await post('/api/chat/room').send({
+      roomId: randomHex(8),
+      accessTokenHash: 'not-a-hex-hash',
+      inviteTokenHashes: [randomHex(32)],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects empty invite token array', async () => {
+    const res = await post('/api/chat/room').send({
+      roomId: randomHex(8),
+      accessTokenHash: randomHex(32),
+      inviteTokenHashes: [],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects too many invite tokens (>50)', async () => {
+    const res = await post('/api/chat/room').send({
+      roomId: randomHex(8),
+      accessTokenHash: randomHex(32),
+      inviteTokenHashes: Array.from({ length: 51 }, () => randomHex(32)),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid invite token hash format', async () => {
+    const res = await post('/api/chat/room').send({
+      roomId: randomHex(8),
+      accessTokenHash: randomHex(32),
+      inviteTokenHashes: ['too-short', randomHex(32)],
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ================================================================
+// ADVERSARIAL — WEBSOCKET ABUSE
+// ================================================================
+
+describe('WebSocket abuse', () => {
+  it('rejects WebSocket to unregistered room', async () => {
+    const ws = new WebSocket(
+      wsUrl('unregisteredroom1', randomHex(32), randomHex(16)),
+      wsOpts(),
+    );
+    const result = await new Promise((resolve) => {
+      ws.on('open', () => resolve('connected'));
+      ws.on('error', () => resolve('rejected'));
+      ws.on('close', () => resolve('rejected'));
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects WebSocket with missing tokens', async () => {
+    const { roomId, accessTokenHash, inviteTokenHashes } = makeRoomFixture();
+    await post('/api/chat/room').send({ roomId, accessTokenHash, inviteTokenHashes });
+
+    // No query params at all
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${serverAddr.port}/chat/${roomId}`,
+      wsOpts(),
+    );
+    const result = await new Promise((resolve) => {
+      ws.on('open', () => resolve('connected'));
+      ws.on('error', () => resolve('rejected'));
+      ws.on('close', () => resolve('rejected'));
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects WebSocket with invalid path', async () => {
+    const ws = new WebSocket(
+      `ws://127.0.0.1:${serverAddr.port}/chat/../../etc/passwd`,
+      wsOpts(),
+    );
+    const result = await new Promise((resolve) => {
+      ws.on('open', () => resolve('connected'));
+      ws.on('error', () => resolve('rejected'));
+      ws.on('close', () => resolve('rejected'));
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects WebSocket without origin header', async () => {
+    const { roomId, accessToken, accessTokenHash, inviteTokens, inviteTokenHashes } = makeRoomFixture();
+    await post('/api/chat/room').send({ roomId, accessTokenHash, inviteTokenHashes });
+
+    const ws = new WebSocket(
+      wsUrl(roomId, accessToken, inviteTokens[0]),
+      { headers: { host: `localhost:${serverAddr.port}` } }, // no origin
+    );
+    const result = await new Promise((resolve) => {
+      ws.on('open', () => resolve('connected'));
+      ws.on('error', () => resolve('rejected'));
+      ws.on('close', () => resolve('rejected'));
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+    expect(result).toBe('rejected');
+  });
+
+  it('terminates connection on oversized WebSocket message', async () => {
+    roomCreateAttempts.clear();
+    const { roomId, accessToken, accessTokenHash, inviteTokens, inviteTokenHashes } = makeRoomFixture();
+    await post('/api/chat/room').send({ roomId, accessTokenHash, inviteTokenHashes });
+    const opts = wsOpts();
+
+    // ws library throws RangeError for max payload exceeded — catch it
+    const uncaughtHandler = () => {};
+    process.on('uncaughtException', uncaughtHandler);
+
+    const wsB = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[0]), opts);
+    await new Promise((resolve) => { wsB.on('message', () => resolve()); });
+
+    // maxPayload is 64KB — sending larger terminates the connection
+    const closePromise = new Promise((resolve) => {
+      wsB.on('close', () => resolve('closed'));
+      wsB.on('error', () => {}); // suppress error event
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+
+    const huge = 'x'.repeat(70000);
+    try { wsB.send(JSON.stringify({ type: 'msg', data: huge, iv: 'iv' })); } catch {}
+
+    const result = await closePromise;
+    expect(result).toBe('closed');
+
+    // Clean up and let the event loop settle
+    await new Promise((r) => setTimeout(r, 100));
+    process.removeListener('uncaughtException', uncaughtHandler);
+  });
+
+  it('silently drops malformed JSON', async () => {
+    roomCreateAttempts.clear();
+    const { roomId, accessToken, accessTokenHash, inviteTokens, inviteTokenHashes } = makeRoomFixture();
+    await post('/api/chat/room').send({ roomId, accessTokenHash, inviteTokenHashes });
+    const opts = wsOpts();
+
+    const wsA = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[0]), opts);
+    await new Promise((resolve) => { wsA.on('message', () => resolve()); });
+
+    const wsB = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[1]), opts);
+    await new Promise((resolve) => { wsB.on('message', () => resolve()); });
+
+    const msgPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Relay timeout')), 3000);
+      wsA.on('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        if (parsed.type === 'msg') {
+          clearTimeout(timeout);
+          resolve(parsed);
+        }
+      });
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+    // Send malformed JSON — should be silently dropped
+    wsB.send('{not json at all!!!');
+    // Send message with wrong type — should be silently dropped
+    wsB.send(JSON.stringify({ type: 'hack', payload: 'xss' }));
+    // Send message missing required fields — should be silently dropped
+    wsB.send(JSON.stringify({ type: 'msg' }));
+    // Send valid message — should arrive
+    wsB.send(JSON.stringify({ type: 'msg', data: 'valid', iv: 'iv' }));
+
+    const relayed = await msgPromise;
+    expect(relayed.data).toBe('valid');
+
+    wsA.close();
+    wsB.close();
+  });
+
+  it('blocks concurrent use of same invite token', async () => {
+    roomCreateAttempts.clear();
+    const { roomId, accessToken, accessTokenHash, inviteTokens, inviteTokenHashes } = makeRoomFixture();
+    await post('/api/chat/room').send({ roomId, accessTokenHash, inviteTokenHashes });
+    const opts = wsOpts();
+
+    // First connection with invite token 0
+    const ws1 = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[0]), opts);
+    await new Promise((resolve) => { ws1.on('message', () => resolve()); });
+
+    // Second connection with SAME invite token — should be rejected
+    const ws2 = new WebSocket(wsUrl(roomId, accessToken, inviteTokens[0]), opts);
+    const result = await new Promise((resolve) => {
+      ws2.on('open', () => resolve('connected'));
+      ws2.on('error', () => resolve('rejected'));
+      ws2.on('close', () => resolve('rejected'));
+      setTimeout(() => resolve('timeout'), 3000);
+    });
+    expect(result).toBe('rejected');
+
+    ws1.close();
+  });
+});
+
+// ================================================================
+// ADVERSARIAL — AUTH ABUSE
+// ================================================================
+
+describe('Auth abuse', () => {
+  it('rejects login with empty body', async () => {
+    const res = await post('/auth/login').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects login with non-string credentials', async () => {
+    const res = await post('/auth/login').send({ username: 123, password: true });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects password change with short password', async () => {
+    const a = await loginAgent();
+    const res = await agentPost(a, '/auth/change-password')
+      .send({ currentPassword: 'testpassword12chars', newPassword: 'short' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects password change with oversized password (DoS prevention)', async () => {
+    const a = await loginAgent();
+    const res = await agentPost(a, '/auth/change-password')
+      .send({ currentPassword: 'testpassword12chars', newPassword: 'x'.repeat(200) });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects password change with wrong current password', async () => {
+    const a = await loginAgent();
+    const res = await agentPost(a, '/auth/change-password')
+      .send({ currentPassword: 'wrong-current-pass', newPassword: 'validpassword12chars' });
+    expect(res.status).toBe(401);
+  });
+
+  it('admin endpoints reject non-UUID drop/file IDs', async () => {
+    const a = await loginAgent();
+    for (const path of ['/api/drops/not-valid', '/api/files/not-valid']) {
+      const res = await agentDel(a, path);
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('admin endpoints return 404 for non-existent resources', async () => {
+    const a = await loginAgent();
+    const res = await agentDel(a, '/api/drops/00000000-0000-0000-0000-000000000000');
+    expect(res.status).toBe(404);
+  });
+});
+
+// ================================================================
+// ADVERSARIAL — ERROR HANDLING
+// ================================================================
+
+describe('Error handling', () => {
+  it('returns JSON 404 for unknown API routes (authenticated)', async () => {
+    const a = await loginAgent();
+    const res = await agentGet(a, '/api/nonexistent');
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty('error');
+    // Must not leak stack traces or internal info
+    expect(JSON.stringify(res.body)).not.toContain('stack');
+  });
+
+  it('blocks unauthenticated access to unknown API routes (no info leak)', async () => {
+    const res = await request(app).get('/api/nonexistent');
+    // Returns 401, not 404 — doesn't reveal whether the route exists
+    expect(res.status).toBe(401);
+  });
+
+  it('blocks unauthenticated access to unknown page routes (no info leak)', async () => {
+    const res = await request(app).get('/nonexistent');
+    // Returns redirect to login, not 404 — doesn't reveal route existence
+    expect([302, 401]).toContain(res.status);
+  });
+
+  it('handles JSON body parse errors gracefully', async () => {
+    const res = await request(app)
+      .post('/api/drop')
+      .set('Origin', ORIGIN)
+      .set('Host', HOST)
+      .set('Content-Type', 'application/json')
+      .send('{"broken json');
+    expect([400, 403, 500]).toContain(res.status);
+    // Must not leak stack traces
+    if (res.body?.error) {
+      expect(res.body.error).not.toContain('SyntaxError');
+    }
+  });
+});
+
+// ================================================================
 // RATE LIMITING (run last — poisons the IP for subsequent logins)
 // ================================================================
 

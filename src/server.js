@@ -321,6 +321,10 @@ app.post('/auth/login', (req, res) => {
     return res.status(429).json({ error: 'Too many attempts. Try again later.' });
   }
   const { username, password } = req.body;
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    verifyHashedPassword('', DUMMY_HASH); // timing equalization
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
   if (username !== ADMIN_USER) {
     // Run dummy scrypt to equalize timing with valid-username path
     verifyHashedPassword(password || '', DUMMY_HASH);
