@@ -326,7 +326,8 @@
       <div class="notice">
         <strong>Zero knowledge.</strong> Your file is encrypted in your browser before it reaches the server.
         The decryption key is in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
-        Image metadata (EXIF, GPS, camera info) is <strong>automatically stripped</strong>.
+        Image metadata (EXIF, GPS, XMP, IPTC, camera info) is <strong>automatically stripped</strong> at the byte level.
+        Non-image files (PDFs, documents, videos) may retain metadata &mdash; a warning is shown.
       </div>
 
       <div class="drop-zone" id="dropZone">
@@ -380,7 +381,7 @@
           <div class="detail">
             1. Your file is encrypted with <code>AES-256-GCM</code> using the Web Crypto API<br>
             2. A random 256-bit key is generated in your browser<br>
-            3. Image metadata (EXIF, GPS, camera info) is automatically stripped via Canvas re-render<br>
+            3. Image metadata (EXIF, GPS, XMP, IPTC, maker notes) is stripped at the byte level for JPEG/PNG, via Canvas for other image formats<br>
             4. The filename and file type are encrypted separately from the content<br>
             5. Only encrypted ciphertext is sent to the server<br>
             6. The key is placed in the URL fragment (<code>#</code>), which browsers never transmit<br>
@@ -597,10 +598,86 @@
     // METADATA STRIPPING
     // ============================================================
 
-    async function stripImageMetadata(file) {
-      const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];
-      if (!imageTypes.includes(file.type)) return null;
+    // --- JPEG byte-level metadata stripping ---
+    // Removes ALL APP segments (APP0-APP15: EXIF, XMP, IPTC, ICC, maker notes)
+    // and COM (comment) segments. Keeps only SOI, SOS (+ scan data), and frame/table markers.
+    function stripJpegMetadata(buf) {
+      const bytes = new _Uint8Array(buf);
+      if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null; // Not JPEG
 
+      const out = [];
+      out.push(0xFF, 0xD8); // SOI
+      let i = 2;
+      while (i < bytes.length - 1) {
+        if (bytes[i] !== 0xFF) { i++; continue; }
+        const marker = bytes[i + 1];
+        // End of image
+        if (marker === 0xD9) { out.push(0xFF, 0xD9); break; }
+        // Start of scan — copy everything from here to end (image data)
+        if (marker === 0xDA) {
+          while (i < bytes.length) out.push(bytes[i++]);
+          break;
+        }
+        // Standalone markers (RST0-RST7, SOI, TEM) — no length field
+        if ((marker >= 0xD0 && marker <= 0xD7) || marker === 0xD8 || marker === 0x01) {
+          out.push(0xFF, marker);
+          i += 2;
+          continue;
+        }
+        // Segment with length
+        if (i + 3 >= bytes.length) break;
+        const segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+        if (segLen < 2) break;
+        // APP0-APP15 (0xE0-0xEF) and COM (0xFE) — skip (strip metadata)
+        if ((marker >= 0xE0 && marker <= 0xEF) || marker === 0xFE) {
+          i += 2 + segLen;
+          continue;
+        }
+        // Keep all other segments (DQT, DHT, SOF, DRI, etc.)
+        for (let j = 0; j < 2 + segLen && i + j < bytes.length; j++) {
+          out.push(bytes[i + j]);
+        }
+        i += 2 + segLen;
+      }
+      return new _Uint8Array(out).buffer;
+    }
+
+    // --- PNG byte-level metadata stripping ---
+    // Keeps only critical chunks (IHDR, PLTE, IDAT, IEND) and essential
+    // ancillary chunks (tRNS for transparency). Strips all metadata chunks
+    // (tEXt, zTXt, iTXt, eXIf, iCCP, sRGB, gAMA, cHRM, pHYs, tIME, etc.)
+    function stripPngMetadata(buf) {
+      const bytes = new _Uint8Array(buf);
+      // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+      if (bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50 ||
+          bytes[2] !== 0x4E || bytes[3] !== 0x47) return null;
+
+      const keep = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND', 'tRNS']);
+      const out = [bytes.slice(0, 8)]; // PNG signature
+      let i = 8;
+      while (i + 8 <= bytes.length) {
+        const dataLen = ((bytes[i] << 24) >>> 0) | (bytes[i+1] << 16) | (bytes[i+2] << 8) | bytes[i+3];
+        if (dataLen > bytes.length) break; // guard against oversized/malformed chunks
+        const chunkType = String.fromCharCode(bytes[i+4], bytes[i+5], bytes[i+6], bytes[i+7]);
+        const totalLen = 12 + dataLen; // 4 length + 4 type + data + 4 CRC
+        if (i + totalLen > bytes.length) break;
+        if (keep.has(chunkType)) {
+          out.push(bytes.slice(i, i + totalLen));
+        }
+        i += totalLen;
+        if (chunkType === 'IEND') break;
+      }
+      // Concatenate
+      let totalSize = 0;
+      for (const chunk of out) totalSize += chunk.length;
+      const result = new _Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of out) { result.set(chunk, offset); offset += chunk.length; }
+      return result.buffer;
+    }
+
+    // --- Canvas fallback for formats without byte-level stripping ---
+    function stripViaCanvas(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
         const url = _createObjectURL(file);
@@ -623,6 +700,55 @@
         };
         img.src = url;
       });
+    }
+
+    // Detect format from magic bytes, not file.type (which is derived from extension)
+    function detectImageFormat(bytes) {
+      if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'jpeg';
+      if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 &&
+          bytes[2] === 0x4E && bytes[3] === 0x47) return 'png';
+      return null;
+    }
+
+    // Returns { buffer, method } or null if not an image
+    async function stripImageMetadata(file) {
+      const buf = await file.arrayBuffer();
+      const header = new _Uint8Array(buf.slice(0, 8));
+      const detectedFormat = detectImageFormat(header);
+
+      // Try byte-level stripping based on actual file content
+      if (detectedFormat === 'jpeg') {
+        const stripped = stripJpegMetadata(buf);
+        if (stripped) return { buffer: stripped, method: 'byte' };
+      }
+      if (detectedFormat === 'png') {
+        const stripped = stripPngMetadata(buf);
+        if (stripped) return { buffer: stripped, method: 'byte' };
+      }
+
+      // Canvas fallback for WebP, BMP, GIF, etc.
+      const imageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'];
+      if (imageTypes.includes(file.type) || detectedFormat) {
+        try {
+          const canvasBuf = await stripViaCanvas(file);
+          if (canvasBuf) return { buffer: canvasBuf, method: 'canvas' };
+        } catch {}
+      }
+
+      return null;
+    }
+
+    // Non-image file types that commonly contain metadata
+    const METADATA_RISK_TYPES = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument',
+      'video/', 'audio/',
+      'application/vnd.oasis.opendocument',
+      'image/svg+xml',
+    ];
+    function hasMetadataRisk(type) {
+      return METADATA_RISK_TYPES.some(function(t) { return type.startsWith(t) || type.includes(t); });
     }
 
     // ============================================================
@@ -695,7 +821,7 @@
       try {
         const stripped = await stripImageMetadata(file);
         if (stripped) {
-          processedBuffer = stripped;
+          processedBuffer = stripped.buffer;
           wasMetadataStripped = true;
         } else {
           processedBuffer = await file.arrayBuffer();
@@ -711,7 +837,12 @@
 
       const metaEl = document.getElementById('fileMeta');
       if (wasMetadataStripped) {
-        metaEl.textContent = 'EXIF / GPS / camera metadata stripped';
+        metaEl.textContent = '\u2713 metadata stripped (EXIF, GPS, XMP, IPTC, camera info removed)';
+        metaEl.style.color = '#4a8c4a';
+        metaEl.classList.remove('hidden');
+      } else if (hasMetadataRisk(file.type)) {
+        metaEl.textContent = '\u26A0 this file type may contain metadata (author, GPS, timestamps, device info) that cannot be automatically stripped';
+        metaEl.style.color = '#8c8c4a';
         metaEl.classList.remove('hidden');
       } else {
         metaEl.classList.add('hidden');
