@@ -377,6 +377,11 @@ For situations where sharing URLs is impractical (e.g., pre-arranged meetups), m
 3. All members with the same passphrase + sequence number arrive at the same encrypted room
 4. If a room is compromised, increment the sequence number to get a fresh room
 
+**Passphrase hardening**: Passphrases are the weakest link in rendezvous — "meeting tuesday 6pm" can be brute-forced quickly despite PBKDF2 stretching. To mitigate:
+- **Diceware generator**: 2048-word embedded wordlist, CSPRNG selection (`crypto.getRandomValues`), zero modular bias. Default 6-word passphrase = 66 bits entropy.
+- **Real-time entropy estimator**: Color-coded strength meter (weak/moderate/strong/very strong). Detects Diceware passphrases, penalizes repetitive patterns, low unique-char ratios, and natural language phrases.
+- **Three-layer enforcement**: Minimum 20 characters, weak passphrase blocklist (28 common passwords), minimum 40-bit entropy estimate. Clear error messages guide users to the Generate button.
+
 ### Key Design Decisions
 
 - **No storage at all**: Messages exist only in transit. The server never buffers them.
@@ -449,7 +454,7 @@ File Drop is designed for sharing files where even the server operator cannot se
 
 ## The Admin Panel
 
-The admin panel at `/panel` is a single-page application with five tabs. All pages use a dark monospace theme.
+The admin panel at `/panel` is a single-page application with five tabs. Tool pages use a Signal-inspired dark UI with system sans-serif fonts and CSS custom properties. The admin panel retains the original monospace theme.
 
 ### Dashboard
 
@@ -612,7 +617,7 @@ The WebSocket tests exercise the full token flow: generate tokens → hash as ra
 
 ### Add a New Tool
 
-1. Create the HTML file in `src/public/` (follow the dark monospace theme)
+1. Create the HTML file in `src/public/` (follow the Signal-inspired dark UI with CSS custom properties)
 2. Add public routes in `src/server.js` before the `requireAuth` middleware
 3. Add a card to `src/public/landing.html` linking to the new tool
 4. Exclude routes from request logging if the tool handles sensitive data

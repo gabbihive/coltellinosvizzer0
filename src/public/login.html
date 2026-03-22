@@ -2,120 +2,148 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="referrer" content="no-referrer">
   <title>Login</title>
   <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-card: #111111;
+      --bg-input: #0e0e0e;
+      --text-primary: #e8e8e8;
+      --text-secondary: #8a8a8a;
+      --text-tertiary: #555555;
+      --text-faint: #333333;
+      --border: #1e1e1e;
+      --border-focus: #333333;
+      --accent: #3a7bd5;
+      --accent-hover: #4a8be5;
+      --red: #d14040;
+      --red-dim: #1f0f0f;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-      background: #0a0a0a;
-      color: #a0a0a0;
+      font-family: var(--font-ui);
+      background: var(--bg-primary);
+      color: var(--text-secondary);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .login-card {
-      background: #111;
-      border: 1px solid #1a1a1a;
-      border-radius: 4px;
-      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 28px;
       width: 100%;
-      max-width: 340px;
+      max-width: 380px;
     }
 
     .login-card h1 {
-      font-size: 13px;
+      font-size: 20px;
       font-weight: 600;
-      color: #e0e0e0;
+      color: var(--text-primary);
       text-align: center;
-      letter-spacing: 2px;
-      text-transform: uppercase;
+      letter-spacing: -0.3px;
       margin-bottom: 4px;
     }
 
-    .login-card p {
-      font-size: 11px;
-      color: #333;
+    .login-card > p {
+      font-size: 14px;
+      color: var(--text-tertiary);
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
     label {
       display: block;
-      font-size: 10px;
-      font-weight: 500;
-      color: #555;
-      margin-bottom: 4px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
+      font-size: 13px;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
     }
 
     input {
       width: 100%;
-      padding: 8px 10px;
-      background: #0a0a0a;
-      border: 1px solid #222;
-      border-radius: 3px;
-      color: #d0d0d0;
-      font-family: inherit;
-      font-size: 12px;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 15px;
       outline: none;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      min-height: 44px;
+      transition: border-color 0.15s ease;
     }
 
-    input:focus { border-color: #333; }
-    input::placeholder { color: #282828; }
+    input:focus { border-color: var(--border-focus); }
+    input::placeholder { color: var(--text-faint); }
 
     .btn {
       width: 100%;
-      padding: 8px 14px;
-      background: #0d1a0d;
-      color: #4a8c4a;
-      border: 1px solid #1a331a;
-      border-radius: 3px;
-      font-family: inherit;
-      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 20px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 15px;
       font-weight: 500;
       cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      transition: all 0.15s;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .btn:hover { background: #143014; color: #6abf6a; }
-    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:active { background: #2a6bc5; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
     .error-msg {
-      background: #1a0d0d;
+      background: var(--red-dim);
       border: 1px solid #331a1a;
-      color: #8c4a4a;
-      border-radius: 3px;
-      padding: 8px 10px;
-      font-size: 11px;
-      margin-bottom: 14px;
+      color: var(--red);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
       display: none;
     }
 
     .back-link {
       display: block;
       text-align: center;
-      margin-top: 16px;
-      font-size: 10px;
-      color: #282828;
+      margin-top: 20px;
+      font-size: 13px;
     }
 
-    .back-link a { color: #333; text-decoration: none; }
-    .back-link a:hover { color: #555; }
+    .back-link a {
+      color: var(--text-tertiary);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .back-link a:hover { color: var(--text-secondary); }
   </style>
 </head>
 <body>
   <form class="login-card" id="loginForm" autocomplete="off">
-    <h1>Authenticate</h1>
-    <p>credentials required</p>
+    <h1>Sign in</h1>
+    <p>Admin credentials required</p>
 
     <div class="error-msg" id="errorMsg"></div>
 
@@ -125,9 +153,9 @@
     <label for="password">Password</label>
     <input type="password" id="password" name="password" autocomplete="off" required>
 
-    <button type="submit" class="btn" id="loginBtn">Authenticate</button>
+    <button type="submit" class="btn" id="loginBtn">Sign in</button>
 
-    <div class="back-link"><a href="/">&larr; back to tools</a></div>
+    <div class="back-link"><a href="/">&larr; Back to tools</a></div>
   </form>
 
   <script>
@@ -141,7 +169,7 @@
       const errEl = document.getElementById('errorMsg');
       errEl.style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Authenticating...';
+      btn.textContent = 'Signing in...';
 
       try {
         const res = await fetch('/auth/login', {
@@ -168,7 +196,7 @@
       }
 
       btn.disabled = false;
-      btn.textContent = 'Authenticate';
+      btn.textContent = 'Sign in';
     });
   </script>
 </body>

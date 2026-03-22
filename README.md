@@ -35,7 +35,7 @@ Zero-knowledge encrypted ephemeral chat at `/chat`. Real-time messaging where th
 - **Fully ephemeral** — no messages stored anywhere (not even in memory)
 - **No traces** — no logging, no IP tracking, no metadata on chat routes
 - **Room access control** — HKDF-derived access tokens + invite tokens (one concurrent connection per token, reconnectable)
-- **Deterministic rendezvous** — passphrase-based room derivation via PBKDF2/HKDF (no URL sharing needed)
+- **Deterministic rendezvous** — passphrase-based room derivation via PBKDF2/HKDF (no URL sharing needed), with Diceware generator (2048-word wordlist, 66-bit entropy), entropy estimator, and minimum strength enforcement
 - **Callsign system** — optional pre-agreed aliases, encrypted in message payload
 - **Participant verification** — SHA-256 safety numbers for out-of-band identity verification
 - **Message padding** — fixed bucket sizes to prevent traffic analysis

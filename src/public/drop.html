@@ -2,77 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Dead Drop</title>
   <meta name="referrer" content="no-referrer">
   <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-card: #111111;
+      --bg-card-hover: #161616;
+      --bg-input: #0e0e0e;
+      --bg-subtle: #1a1a1a;
+      --text-primary: #e8e8e8;
+      --text-secondary: #8a8a8a;
+      --text-tertiary: #555555;
+      --text-faint: #333333;
+      --border: #1e1e1e;
+      --border-focus: #333333;
+      --accent: #3a7bd5;
+      --accent-hover: #4a8be5;
+      --green: #2d9a2d;
+      --green-dim: #0f1f0f;
+      --green-text: #4caf50;
+      --red: #d14040;
+      --red-dim: #1f0f0f;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-      background: #0a0a0a;
-      color: #a0a0a0;
+      font-family: var(--font-ui);
+      background: var(--bg-primary);
+      color: var(--text-secondary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .container {
-      max-width: 700px;
+      max-width: 540px;
       width: 100%;
       margin: 0 auto;
-      padding: 40px 20px;
+      padding: 48px 20px 32px;
       flex: 1;
     }
 
     header {
-      margin-bottom: 40px;
+      margin-bottom: 32px;
     }
 
     header h1 {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 600;
-      color: #e0e0e0;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+      margin-bottom: 4px;
     }
 
     header p {
-      font-size: 12px;
-      color: #505050;
+      font-size: 14px;
+      color: var(--text-tertiary);
     }
 
     .notice {
-      background: #0d1a0d;
-      border: 1px solid #1a331a;
-      border-radius: 4px;
+      background: var(--green-dim);
+      border: 1px solid #1a2e1a;
+      border-radius: var(--radius-sm);
       padding: 14px 16px;
-      font-size: 11px;
-      color: #4a8c4a;
-      margin-bottom: 24px;
+      font-size: 13px;
+      color: #6a9a6a;
+      margin-bottom: 20px;
       line-height: 1.6;
     }
 
-    .notice strong { color: #6abf6a; }
+    .notice strong { color: var(--green-text); }
+    .notice code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(255,255,255,0.05);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
 
     textarea {
       width: 100%;
-      min-height: 240px;
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
-      color: #d0d0d0;
-      font-family: inherit;
-      font-size: 13px;
+      min-height: 220px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 14px;
       padding: 16px;
       resize: vertical;
       outline: none;
-      line-height: 1.5;
+      line-height: 1.6;
+      transition: border-color 0.15s ease;
     }
 
-    textarea:focus { border-color: #333; }
-    textarea::placeholder { color: #333; }
+    textarea:focus { border-color: var(--border-focus); }
+    textarea::placeholder { color: var(--text-faint); }
 
     .options {
       display: flex;
@@ -83,187 +117,207 @@
     }
 
     .options label {
-      font-size: 12px;
-      color: #666;
+      font-size: 14px;
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       cursor: pointer;
+      min-height: 44px;
     }
 
     select {
-      background: #111;
-      border: 1px solid #222;
-      color: #a0a0a0;
-      font-family: inherit;
-      font-size: 12px;
-      padding: 6px 10px;
-      border-radius: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
       outline: none;
       cursor: pointer;
+      min-height: 44px;
+      transition: border-color 0.15s ease;
     }
 
-    select:focus { border-color: #333; }
+    select:focus { border-color: var(--border-focus); }
 
     input[type="checkbox"] {
-      accent-color: #c0392b;
-      width: 14px;
-      height: 14px;
+      accent-color: var(--red);
+      width: 18px;
+      height: 18px;
       cursor: pointer;
     }
 
     .btn {
-      padding: 10px 24px;
-      background: #1a1a1a;
-      color: #a0a0a0;
-      border: 1px solid #333;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      min-height: 44px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      transition: all 0.15s;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .btn:hover { background: #222; color: #e0e0e0; border-color: #444; }
-    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:active { background: #2a6bc5; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .btn-destroy {
-      background: #1a0d0d;
-      border-color: #331a1a;
-      color: #c0392b;
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
     }
 
-    .btn-destroy:hover { background: #2a1010; border-color: #4a1a1a; }
+    .btn-secondary:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .btn-secondary:active { background: var(--bg-subtle); }
 
     .actions {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       margin-top: 16px;
       flex-wrap: wrap;
     }
 
     .result {
-      margin-top: 24px;
+      margin-top: 20px;
       display: none;
     }
 
     .result-url {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
-      padding: 14px 16px;
-      font-size: 12px;
-      color: #6abf6a;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--green-text);
       word-break: break-all;
       cursor: pointer;
       position: relative;
-      line-height: 1.5;
+      line-height: 1.6;
+      transition: border-color 0.15s ease;
     }
 
-    .result-url:hover { border-color: #333; }
+    .result-url:hover { border-color: var(--border-focus); }
 
     .result-url .copy-hint {
       position: absolute;
-      top: 8px;
+      top: 10px;
       right: 12px;
-      font-size: 10px;
-      color: #444;
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--text-faint);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
     }
 
     .result-warn {
       margin-top: 10px;
-      font-size: 11px;
-      color: #8c4a4a;
+      font-size: 13px;
+      color: var(--red);
     }
 
     /* Reading view */
     .read-view { display: none; }
 
     .read-content {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 20px;
-      font-size: 13px;
-      color: #d0d0d0;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-primary);
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.6;
+      line-height: 1.7;
       min-height: 120px;
     }
 
     .burned-notice {
       margin-top: 12px;
-      font-size: 11px;
-      color: #c0392b;
+      font-size: 13px;
+      color: var(--red);
       display: none;
     }
 
     .error-view {
       display: none;
       text-align: center;
-      padding: 60px 20px;
+      padding: 80px 20px;
     }
 
     .error-view h2 {
-      font-size: 16px;
-      color: #666;
+      font-size: 18px;
+      color: var(--text-secondary);
       font-weight: 500;
       margin-bottom: 8px;
     }
 
     .error-view p {
-      font-size: 12px;
-      color: #444;
+      font-size: 14px;
+      color: var(--text-tertiary);
     }
 
-    .error-view .btn { margin-top: 24px; }
+    .error-view .btn { margin-top: 28px; }
 
     footer {
       text-align: center;
-      padding: 20px;
-      font-size: 10px;
-      color: #282828;
-      letter-spacing: 1px;
+      padding: 24px 20px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      opacity: 0.3;
     }
 
     .security-info {
-      margin-top: 32px;
-      border-top: 1px solid #181818;
+      margin-top: 36px;
       padding-top: 20px;
     }
 
-    .security-info summary {
-      font-size: 11px;
-      color: #444;
-      cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      outline: none;
+    .security-info details {
+      margin-bottom: 4px;
     }
 
-    .security-info summary:hover { color: #666; }
+    .security-info summary {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 10px 0;
+      outline: none;
+      transition: color 0.15s ease;
+    }
+
+    .security-info summary:hover { color: var(--text-secondary); }
 
     .security-info .detail {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #383838;
+      margin-top: 4px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--text-faint);
       line-height: 1.8;
+      padding-left: 4px;
     }
 
     .security-info .detail code {
-      color: #505050;
-      background: #111;
-      padding: 1px 5px;
-      border-radius: 3px;
+      font-family: var(--font-mono);
+      color: var(--text-tertiary);
+      background: var(--bg-card);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
     }
 
     @media (max-width: 500px) {
-      .options { flex-direction: column; gap: 10px; }
+      .options { flex-direction: column; gap: 12px; align-items: flex-start; }
     }
   </style>
 </head>
@@ -272,7 +326,7 @@
   <div class="container">
     <header>
       <h1>Dead Drop</h1>
-      <p>zero-knowledge encrypted paste bin</p>
+      <p>Zero-knowledge encrypted paste bin</p>
     </header>
 
     <!-- COMPOSE VIEW -->
@@ -280,7 +334,6 @@
       <div class="notice">
         <strong>Zero knowledge.</strong> Your text is encrypted in your browser before it reaches the server.
         The decryption key is in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
-        The server cannot read your content. Nobody can, except whoever has the link.
       </div>
 
       <textarea id="content" placeholder="Type or paste your message here..." autofocus spellcheck="false" autocomplete="off"></textarea>
@@ -307,7 +360,7 @@
 
       <div class="result" id="result">
         <div class="result-url" id="resultUrl" title="Click to copy">
-          <span class="copy-hint">click to copy</span>
+          <span class="copy-hint">tap to copy</span>
           <span id="resultUrlText"></span>
         </div>
         <p class="result-warn" id="resultWarn"></p>
@@ -324,8 +377,7 @@
             5. When someone opens the link, the key is read from the fragment and used to decrypt locally<br>
             6. The server never sees the plaintext or the key &mdash; even if compromised<br>
             7. Burn-after-reading pastes are deleted from memory immediately after one retrieval<br>
-            8. No IP addresses, no cookies, no user agents, no analytics are recorded for drops<br>
-            9. Expired pastes are deleted on access &mdash; they cannot be recovered
+            8. No IP addresses, cookies, or analytics are recorded for drops
           </div>
         </details>
         <details>
@@ -334,15 +386,9 @@
             Client-side encryption protects your data from the server operator,
             network observers, and casual forensics. It cannot protect against:<br><br>
             &bull; A compromised device (malware, keyloggers, screen capture)<br>
-            &bull; A compromised browser (malicious extensions with page access)<br>
-            &bull; Physical access to an unlocked device<br>
-            &bull; Browser vulnerabilities or zero-day exploits<br><br>
-            This tool performs runtime integrity checks to detect common
-            tampering, but these checks run in the same environment they
-            are trying to verify &mdash; a fundamental limitation of
-            client-side security. For high-risk situations, use a trusted
-            device with a minimal browser profile (no extensions) and a
-            verified OS.
+            &bull; A compromised browser or malicious extensions<br>
+            &bull; Physical access to an unlocked device<br><br>
+            For high-risk situations, use a trusted device with no extensions and a verified OS.
           </div>
         </details>
       </div>
@@ -353,8 +399,8 @@
       <div class="read-content" id="readContent"></div>
       <p class="burned-notice" id="burnedNotice">This message has been destroyed. It cannot be viewed again.</p>
       <div class="actions" style="margin-top:16px">
-        <button class="btn" id="copyContentBtn">Copy to clipboard</button>
-        <a href="/drop" class="btn" style="text-decoration:none">New drop</a>
+        <button class="btn btn-secondary" id="copyContentBtn">Copy to clipboard</button>
+        <a href="/drop" class="btn btn-secondary" style="text-decoration:none">New drop</a>
       </div>
     </div>
 
@@ -362,11 +408,11 @@
     <div class="error-view" id="errorView">
       <h2 id="errorTitle">Not found</h2>
       <p id="errorDesc">This drop has expired, been burned, or never existed.</p>
-      <a href="/drop" class="btn" style="text-decoration:none">Create a new drop</a>
+      <a href="/drop" class="btn" style="text-decoration:none;margin-top:28px">Create a new drop</a>
     </div>
   </div>
 
-  <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
+  <footer>no logs &middot; no tracking &middot; no metadata</footer>
 
   <script>
     'use strict';

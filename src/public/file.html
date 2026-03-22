@@ -2,117 +2,160 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>File Drop</title>
   <meta name="referrer" content="no-referrer">
   <style>
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-card: #111111;
+      --bg-card-hover: #161616;
+      --bg-input: #0e0e0e;
+      --bg-subtle: #1a1a1a;
+      --text-primary: #e8e8e8;
+      --text-secondary: #8a8a8a;
+      --text-tertiary: #555555;
+      --text-faint: #333333;
+      --border: #1e1e1e;
+      --border-focus: #333333;
+      --accent: #3a7bd5;
+      --accent-hover: #4a8be5;
+      --green: #2d9a2d;
+      --green-dim: #0f1f0f;
+      --green-text: #4caf50;
+      --amber: #c4842d;
+      --amber-dim: #1f170f;
+      --red: #d14040;
+      --red-dim: #1f0f0f;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-      background: #0a0a0a;
-      color: #a0a0a0;
+      font-family: var(--font-ui);
+      background: var(--bg-primary);
+      color: var(--text-secondary);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .container {
-      max-width: 700px;
+      max-width: 540px;
       width: 100%;
       margin: 0 auto;
-      padding: 40px 20px;
+      padding: 48px 20px 32px;
       flex: 1;
     }
 
-    header { margin-bottom: 40px; }
+    header { margin-bottom: 32px; }
 
     header h1 {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 600;
-      color: #e0e0e0;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+      margin-bottom: 4px;
     }
 
-    header p { font-size: 12px; color: #505050; }
+    header p { font-size: 14px; color: var(--text-tertiary); }
 
     .notice {
-      background: #0d1a0d;
-      border: 1px solid #1a331a;
-      border-radius: 4px;
+      background: var(--green-dim);
+      border: 1px solid #1a2e1a;
+      border-radius: var(--radius-sm);
       padding: 14px 16px;
-      font-size: 11px;
-      color: #4a8c4a;
-      margin-bottom: 24px;
+      font-size: 13px;
+      color: #6a9a6a;
+      margin-bottom: 20px;
       line-height: 1.6;
     }
 
-    .notice strong { color: #6abf6a; }
+    .notice strong { color: var(--green-text); }
+    .notice code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(255,255,255,0.05);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
 
     .hidden { display: none !important; }
 
     /* Drop zone */
     .drop-zone {
-      border: 2px dashed #222;
-      border-radius: 4px;
-      padding: 48px 24px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 56px 24px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.15s ease, background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .drop-zone:hover, .drop-zone.dragover {
-      border-color: #4a8c4a;
-      background: #0d1a0d;
+      border-color: var(--accent);
+      background: rgba(58, 123, 213, 0.04);
     }
 
-    .drop-zone-arrow { font-size: 24px; color: #333; margin-bottom: 12px; }
-    .drop-zone-text { font-size: 13px; color: #666; }
-    .drop-zone-limit { font-size: 11px; color: #333; margin-top: 8px; }
+    .drop-zone-icon { margin-bottom: 14px; opacity: 0.3; }
+    .drop-zone-icon svg { width: 36px; height: 36px; color: var(--text-secondary); }
+    .drop-zone:hover .drop-zone-icon, .drop-zone.dragover .drop-zone-icon { opacity: 0.6; }
+    .drop-zone-text { font-size: 15px; color: var(--text-secondary); }
+    .drop-zone-limit { font-size: 13px; color: var(--text-faint); margin-top: 6px; }
 
     /* File info */
     .file-info {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 16px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }
 
     .file-icon {
-      width: 40px;
-      height: 40px;
-      background: #0d1a0d;
-      border-radius: 6px;
+      width: 44px;
+      height: 44px;
+      background: var(--amber-dim);
+      border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
-      color: #4a8c4a;
       flex-shrink: 0;
     }
 
+    .file-icon { font-size: 18px; color: var(--amber); }
+
     .file-details { flex: 1; min-width: 0; }
-    .file-name { font-size: 13px; color: #e0e0e0; word-break: break-all; }
-    .file-size { font-size: 11px; color: #555; margin-top: 2px; }
-    .file-meta { font-size: 10px; color: #4a8c4a; margin-top: 4px; }
+    .file-name { font-size: 14px; color: var(--text-primary); word-break: break-all; }
+    .file-size { font-size: 13px; color: var(--text-tertiary); margin-top: 2px; }
+    .file-meta { font-size: 12px; color: var(--green-text); margin-top: 4px; }
 
     .btn-clear {
       background: none;
       border: none;
-      color: #444;
+      color: var(--text-faint);
       cursor: pointer;
-      font-family: inherit;
-      font-size: 16px;
-      padding: 4px 8px;
-      transition: color 0.15s;
+      font-size: 20px;
+      padding: 8px;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .btn-clear:hover { color: #8c4a4a; }
+    .btn-clear:hover { color: var(--red); }
 
     .options {
       display: flex;
@@ -123,193 +166,215 @@
     }
 
     .options label {
-      font-size: 12px;
-      color: #666;
+      font-size: 14px;
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       cursor: pointer;
+      min-height: 44px;
     }
 
     select {
-      background: #111;
-      border: 1px solid #222;
-      color: #a0a0a0;
-      font-family: inherit;
-      font-size: 12px;
-      padding: 6px 10px;
-      border-radius: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
       outline: none;
       cursor: pointer;
+      min-height: 44px;
+      transition: border-color 0.15s ease;
     }
 
-    select:focus { border-color: #333; }
+    select:focus { border-color: var(--border-focus); }
 
     input[type="checkbox"] {
-      accent-color: #c0392b;
-      width: 14px;
-      height: 14px;
+      accent-color: var(--red);
+      width: 18px;
+      height: 18px;
       cursor: pointer;
     }
 
     .btn {
-      padding: 10px 24px;
-      background: #1a1a1a;
-      color: #a0a0a0;
-      border: 1px solid #333;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 24px;
+      min-height: 44px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      transition: all 0.15s;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .btn:hover { background: #222; color: #e0e0e0; border-color: #444; }
-    .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:active { background: #2a6bc5; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
     .btn-primary {
-      background: #0d1a0d;
-      border-color: #1a331a;
-      color: #4a8c4a;
+      background: var(--accent);
+      color: #ffffff;
     }
 
-    .btn-primary:hover { background: #143014; color: #6abf6a; }
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 
     .actions {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       margin-top: 16px;
       flex-wrap: wrap;
     }
 
-    .result { margin-top: 24px; }
+    .result { margin-top: 20px; }
 
     .result-url {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
-      padding: 14px 16px;
-      font-size: 12px;
-      color: #6abf6a;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--green-text);
       word-break: break-all;
       cursor: pointer;
       position: relative;
-      line-height: 1.5;
+      line-height: 1.6;
+      transition: border-color 0.15s ease;
     }
 
-    .result-url:hover { border-color: #333; }
+    .result-url:hover { border-color: var(--border-focus); }
 
     .result-url .copy-hint {
       position: absolute;
-      top: 8px;
+      top: 10px;
       right: 12px;
-      font-size: 10px;
-      color: #444;
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--text-faint);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
     }
 
     .result-warn {
       margin-top: 10px;
-      font-size: 11px;
-      color: #8c4a4a;
+      font-size: 13px;
+      color: var(--red);
     }
 
     /* Download view */
     .dl-card {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 4px;
-      padding: 32px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 32px;
       text-align: center;
     }
 
     .dl-icon {
       width: 56px;
       height: 56px;
-      background: #0d1a0d;
-      border-radius: 12px;
+      background: var(--amber-dim);
+      border-radius: var(--radius);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
-      color: #4a8c4a;
       margin: 0 auto 16px;
     }
 
+    .dl-icon svg { width: 28px; height: 28px; color: var(--amber); }
+
     .dl-name {
-      font-size: 14px;
-      color: #e0e0e0;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
       word-break: break-all;
       margin-bottom: 4px;
     }
 
-    .dl-size { font-size: 11px; color: #555; }
+    .dl-size { font-size: 13px; color: var(--text-tertiary); }
 
     .burned-notice {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #c0392b;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--red);
     }
 
     .error-view {
       text-align: center;
-      padding: 60px 20px;
+      padding: 80px 20px;
     }
 
     .error-view h2 {
-      font-size: 16px;
-      color: #666;
+      font-size: 18px;
+      color: var(--text-secondary);
       font-weight: 500;
       margin-bottom: 8px;
     }
 
-    .error-view p { font-size: 12px; color: #444; }
-    .error-view .btn { margin-top: 24px; }
+    .error-view p { font-size: 14px; color: var(--text-tertiary); }
+    .error-view .btn { margin-top: 28px; }
 
     footer {
       text-align: center;
-      padding: 20px;
-      font-size: 10px;
-      color: #282828;
-      letter-spacing: 1px;
+      padding: 24px 20px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      opacity: 0.3;
     }
 
     .security-info {
-      margin-top: 32px;
-      border-top: 1px solid #181818;
+      margin-top: 36px;
       padding-top: 20px;
     }
 
+    .security-info details { margin-bottom: 4px; }
+
     .security-info summary {
-      font-size: 11px;
-      color: #444;
+      font-size: 13px;
+      color: var(--text-tertiary);
       cursor: pointer;
-      letter-spacing: 1px;
-      text-transform: uppercase;
+      padding: 10px 0;
       outline: none;
+      transition: color 0.15s ease;
     }
 
-    .security-info summary:hover { color: #666; }
+    .security-info summary:hover { color: var(--text-secondary); }
 
     .security-info .detail {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #383838;
+      margin-top: 4px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--text-faint);
       line-height: 1.8;
+      padding-left: 4px;
     }
 
     .security-info .detail code {
-      color: #505050;
-      background: #111;
-      padding: 1px 5px;
-      border-radius: 3px;
+      font-family: var(--font-mono);
+      color: var(--text-tertiary);
+      background: var(--bg-card);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
     }
 
     @media (max-width: 500px) {
-      .options { flex-direction: column; gap: 10px; }
+      .options { flex-direction: column; gap: 12px; align-items: flex-start; }
     }
   </style>
 </head>
@@ -318,22 +383,27 @@
   <div class="container">
     <header>
       <h1>File Drop</h1>
-      <p>zero-knowledge encrypted file sharing</p>
+      <p>Zero-knowledge encrypted file sharing</p>
     </header>
 
     <!-- UPLOAD VIEW -->
     <div id="uploadView">
       <div class="notice">
-        <strong>Zero knowledge.</strong> Your file is encrypted in your browser before it reaches the server.
-        The decryption key is in the URL fragment (<code>#</code>) which is <strong>never sent</strong> to the server.
-        Image metadata (EXIF, GPS, XMP, IPTC, camera info) is <strong>automatically stripped</strong> at the byte level.
-        Non-image files (PDFs, documents, videos) may retain metadata &mdash; a warning is shown.
+        <strong>Zero knowledge.</strong> Your file is encrypted in your browser before upload.
+        Image metadata (EXIF, GPS) is <strong>automatically stripped</strong> at the byte level.
+        Non-image files may retain metadata &mdash; a warning is shown.
       </div>
 
       <div class="drop-zone" id="dropZone">
         <input type="file" id="fileInput" hidden>
-        <div class="drop-zone-arrow">&uarr;</div>
-        <div class="drop-zone-text">Drop a file here or click to browse</div>
+        <div class="drop-zone-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <path d="M17 8l-5-5-5 5"/>
+            <path d="M12 3v12"/>
+          </svg>
+        </div>
+        <div class="drop-zone-text">Drop a file here or tap to browse</div>
         <div class="drop-zone-limit">10 MB max</div>
       </div>
 
@@ -369,7 +439,7 @@
 
       <div class="result hidden" id="result">
         <div class="result-url" id="resultUrl" title="Click to copy">
-          <span class="copy-hint">click to copy</span>
+          <span class="copy-hint">tap to copy</span>
           <span id="resultUrlText"></span>
         </div>
         <p class="result-warn" id="resultWarn"></p>
@@ -381,13 +451,13 @@
           <div class="detail">
             1. Your file is encrypted with <code>AES-256-GCM</code> using the Web Crypto API<br>
             2. A random 256-bit key is generated in your browser<br>
-            3. Image metadata (EXIF, GPS, XMP, IPTC, maker notes) is stripped at the byte level for JPEG/PNG, via Canvas for other image formats<br>
-            4. The filename and file type are encrypted separately from the content<br>
+            3. Image metadata is stripped at the byte level for JPEG/PNG, via Canvas for other formats<br>
+            4. The filename and file type are encrypted separately<br>
             5. Only encrypted ciphertext is sent to the server<br>
-            6. The key is placed in the URL fragment (<code>#</code>), which browsers never transmit<br>
-            7. The server never sees your file, filename, or file type &mdash; even if compromised<br>
-            8. Burn-after-download files are deleted from memory after one retrieval<br>
-            9. No IP addresses, no cookies, no user agents, no analytics are recorded for file drops
+            6. The key is in the URL fragment (<code>#</code>), which browsers never transmit<br>
+            7. The server never sees your file, filename, or file type<br>
+            8. Burn-after-download files are deleted after one retrieval<br>
+            9. No IP addresses, cookies, or analytics are recorded for file drops
           </div>
         </details>
         <details>
@@ -396,15 +466,9 @@
             Client-side encryption protects your data from the server operator,
             network observers, and casual forensics. It cannot protect against:<br><br>
             &bull; A compromised device (malware, keyloggers, screen capture)<br>
-            &bull; A compromised browser (malicious extensions with page access)<br>
-            &bull; Physical access to an unlocked device<br>
-            &bull; Browser vulnerabilities or zero-day exploits<br><br>
-            This tool performs runtime integrity checks to detect common
-            tampering, but these checks run in the same environment they
-            are trying to verify &mdash; a fundamental limitation of
-            client-side security. For high-risk situations, use a trusted
-            device with a minimal browser profile (no extensions) and a
-            verified OS.
+            &bull; A compromised browser or malicious extensions<br>
+            &bull; Physical access to an unlocked device<br><br>
+            For high-risk situations, use a trusted device with no extensions and a verified OS.
           </div>
         </details>
       </div>
@@ -413,14 +477,20 @@
     <!-- DOWNLOAD VIEW -->
     <div class="hidden" id="downloadView">
       <div class="dl-card">
-        <div class="dl-icon">&darr;</div>
+        <div class="dl-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <path d="M7 10l5 5 5-5"/>
+            <path d="M12 15V3"/>
+          </svg>
+        </div>
         <div class="dl-name" id="dlFileName">Decrypting...</div>
         <div class="dl-size" id="dlFileSize"></div>
       </div>
       <p class="burned-notice hidden" id="burnedNotice">This file has been destroyed. It cannot be downloaded again.</p>
       <div class="actions" style="margin-top:16px">
         <button class="btn btn-primary" id="downloadBtn" disabled>Decrypting...</button>
-        <a href="/file" class="btn" style="text-decoration:none">New file drop</a>
+        <a href="/file" class="btn btn-secondary" style="text-decoration:none">New file drop</a>
       </div>
     </div>
 
@@ -428,11 +498,11 @@
     <div class="error-view hidden" id="errorView">
       <h2 id="errorTitle">Not found</h2>
       <p id="errorDesc">This file has expired, been burned, or never existed.</p>
-      <a href="/file" class="btn" style="text-decoration:none">Upload a new file</a>
+      <a href="/file" class="btn" style="text-decoration:none;margin-top:28px">Upload a new file</a>
     </div>
   </div>
 
-  <footer>no logs &middot; no tracking &middot; no metadata &middot; zero knowledge</footer>
+  <footer>no logs &middot; no tracking &middot; no metadata</footer>
 
   <script>
     'use strict';
