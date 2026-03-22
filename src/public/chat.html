@@ -452,10 +452,25 @@
         <div class="notice">
           <strong>Passphrase-based rendezvous.</strong> Enter a pre-agreed passphrase and sequence number.
           All members with the same passphrase and sequence will arrive at the same encrypted room.
-          The server never sees the passphrase &mdash; all keys are derived locally. Nothing is stored.
+          Use <strong>Generate</strong> for a secure random passphrase, or enter your own (minimum 20 characters).
+          The server never sees the passphrase &mdash; all keys are derived locally.
         </div>
         <label class="input-label" for="passphrase">Shared passphrase</label>
-        <input type="password" id="passphrase" class="text-input" placeholder="Enter pre-agreed passphrase" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:12px;">
+        <input type="password" id="passphrase" class="text-input" placeholder="Enter pre-agreed passphrase" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:6px;">
+        <div style="display:flex;gap:8px;margin-bottom:6px;">
+          <button type="button" class="btn" id="generateBtn" style="font-size:10px;padding:5px 10px;">Generate</button>
+          <button type="button" class="btn" id="togglePassBtn" style="font-size:10px;padding:5px 10px;min-width:50px;">Show</button>
+        </div>
+        <div id="passStrength" style="margin-bottom:12px;display:none;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;">
+              <div id="strengthFill" style="height:100%;width:0;transition:width 0.2s,background 0.2s;"></div>
+            </div>
+            <span id="strengthLabel" style="font-size:10px;letter-spacing:0.5px;min-width:80px;text-align:right;"></span>
+          </div>
+          <div id="strengthHint" style="font-size:10px;color:#555;margin-top:4px;"></div>
+        </div>
+        <div id="passError" style="font-size:10px;color:#8c4a4a;margin-bottom:8px;display:none;"></div>
         <div style="display:flex;gap:12px;align-items:flex-end;">
           <div>
             <label class="input-label" for="seqNum">Sequence</label>
@@ -732,6 +747,299 @@
       const buf = new _Uint8Array(hex.length / 2);
       for (let i = 0; i < hex.length; i += 2) buf[i / 2] = parseInt(hex.substr(i, 2), 16);
       return buf;
+    }
+
+    // ============================================================
+    // PASSPHRASE STRENGTH
+    // ============================================================
+
+    // Curated 2048-word list (11 bits entropy per word, zero modular bias with 16-bit random)
+    // Short, common, easy-to-spell English words suitable for verbal exchange
+    const WORDLIST = [
+      'able','acid','aged','also','area','army','away','baby','back','ball',
+      'band','bank','base','bath','bean','bear','beat','been','beer','bell',
+      'belt','best','bill','bind','bird','bite','blow','blue','blur','boat',
+      'body','bolt','bomb','bond','bone','book','boot','born','boss','both',
+      'bowl','bulk','burn','busy','cafe','cage','cake','call','calm','came',
+      'camp','card','care','cart','case','cash','cast','cave','cell','chat',
+      'chip','city','clad','claim','clam','clap','claw','clay','clip','clock',
+      'club','clue','coal','coat','code','coil','coin','cold','colt','come',
+      'cook','cool','cope','copy','cord','core','cork','corn','cost','cove',
+      'crew','crop','cure','curl','cute','dame','dare','dark','dart','dash',
+      'data','date','dawn','days','dead','deaf','deal','dear','debt','deck',
+      'deed','deem','deep','deer','demo','deny','desk','dial','dice','dine',
+      'dirt','disc','dish','dock','does','dome','done','doom','door','dose',
+      'dove','down','drag','draw','drew','drip','drop','drum','dual','duck',
+      'dude','duel','duke','dull','dumb','dump','dune','dusk','dust','duty',
+      'each','earn','ease','east','easy','edge','else','emit','envy','epic',
+      'even','ever','evil','exam','exit','expo','face','fact','fade','fail',
+      'fair','fake','fall','fame','fang','farm','fast','fate','fawn','fear',
+      'feat','feed','feel','fell','felt','fend','fern','file','fill','film',
+      'find','fine','fire','firm','fish','fist','five','flag','flame','flap',
+      'flat','flaw','fled','flew','flex','flip','flock','flow','foam','fold',
+      'folk','fond','font','food','fool','foot','ford','fore','fork','form',
+      'fort','foul','four','fowl','free','frog','from','fuel','full','fund',
+      'fury','fuse','fuss','gain','gait','gale','game','gang','gape','garb',
+      'gate','gave','gaze','gear','gene','gift','girl','give','glad','glen',
+      'glow','glue','goat','goes','gold','golf','gone','good','grab','gram',
+      'gray','grew','grid','grim','grin','grip','grit','grow','gulf','gust',
+      'hack','hail','hair','half','hall','halt','hand','hang','hare','harm',
+      'harp','hash','hate','haul','have','haze','head','heal','heap','hear',
+      'heat','heel','held','helm','help','herb','herd','here','hero','hide',
+      'high','hike','hill','hint','hire','hold','hole','holy','home','hood',
+      'hook','hope','horn','host','hour','howl','huge','hull','hung','hunt',
+      'hurl','hurt','hush','icon','idea','inch','into','iris','iron','isle',
+      'item','jack','jade','jail','jazz','jean','jest','jobs','join','joke',
+      'jump','june','jury','just','keen','keep','kelp','kept','kick','kids',
+      'kill','kind','king','kiss','kite','knee','knew','knit','knob','knot',
+      'know','lace','lack','laid','lake','lamb','lame','lamp','land','lane',
+      'last','late','lawn','lead','leaf','lean','leap','left','lend','lens',
+      'lent','less','lick','lied','lieu','life','lift','like','limb','lime',
+      'limp','line','link','lion','lips','list','live','load','loaf','loan',
+      'lock','lodge','loft','logo','long','look','loop','lord','lose','loss',
+      'lost','lots','loud','love','luck','lump','lure','lurk','lush','made',
+      'mail','main','make','male','mall','malt','mane','many','maps','mare',
+      'mark','mars','mash','mask','mass','mast','mate','maze','mead','meal',
+      'mean','meat','meet','meld','melt','memo','mend','menu','mere','mesh',
+      'mess','mice','mild','mile','milk','mill','mime','mind','mine','mint',
+      'miss','mist','mock','mode','mold','monk','mood','moon','more','moss',
+      'most','moth','move','much','muse','mush','must','mute','myth','nail',
+      'name','navy','near','neat','neck','need','nest','nets','news','next',
+      'nice','nine','node','none','norm','nose','note','noun','nova','null',
+      'nuts','oath','odds','oils','okay','omen','once','only','onto','opal',
+      'open','opts','oral','ours','oust','oven','over','owed','owls','owns',
+      'pace','pack','page','paid','pail','pain','pair','pale','palm','pane',
+      'pant','park','part','pass','past','path','pave','peak','pear','peat',
+      'peel','peer','pelt','perk','pest','pick','pier','pike','pile','pine',
+      'pink','pint','pipe','plan','play','plea','plot','plow','plug','plum',
+      'plus','poem','poet','pole','poll','polo','pond','pool','pope','pork',
+      'port','pose','post','pour','pray','prey','prop','pull','pulp','pump',
+      'pure','push','quit','quiz','race','rack','raft','rage','raid','rail',
+      'rain','rake','ramp','rang','rank','rare','rash','rate','rave','rays',
+      'read','real','reap','rear','reed','reef','reel','rein','rely','rent',
+      'rest','rice','rich','ride','rift','ring','rink','riot','ripe','rise',
+      'risk','road','roam','roar','robe','rock','rode','role','roll','roof',
+      'room','root','rope','rose','rote','ruin','rule','rung','runt','rush',
+      'rust','sack','safe','sage','said','sail','sake','sale','salt','same',
+      'sand','sane','sang','sank','sash','save','scan','seal','seam','seed',
+      'seek','seem','seen','self','sell','send','sent','sept','sewn','shed',
+      'shin','ship','shoe','shop','shot','show','shut','sick','side','sigh',
+      'sign','silk','sill','silt','sink','site','size','skim','skin','skip',
+      'slab','slam','slap','slat','sled','slew','slid','slim','slip','slit',
+      'slot','slow','slug','snap','snow','soak','soap','soar','sock','sofa',
+      'soft','soil','sold','sole','some','song','soon','sort','soul','sour',
+      'span','spar','spec','sped','spin','spit','spot','stab','stag','star',
+      'stay','stem','step','stew','stir','stop','stow','stub','stud','such',
+      'suit','sulk','sung','sunk','sure','surf','swan','swap','swim','sync',
+      'tabs','tack','tact','tail','take','tale','talk','tall','tame','tang',
+      'tank','tape','taps','tart','task','taxi','team','tear','tell','tend',
+      'tent','term','test','text','than','that','them','then','they','thin',
+      'this','thorn','thus','tick','tide','tidy','tied','tier','tile','till',
+      'tilt','time','tint','tiny','tips','tire','toad','toil','told','toll',
+      'tomb','tone','took','tool','tops','tore','torn','toss','tour','town',
+      'trap','tray','tree','trek','trim','trio','trip','trod','trot','true',
+      'tube','tuck','tuft','tuna','tune','turf','turn','tusk','twin','type',
+      'unit','upon','urge','used','user','vale','vane','vary','vase','vast',
+      'veil','vein','vent','verb','very','vest','veto','vial','vice','view',
+      'vine','void','volt','vote','wade','wage','wait','wake','walk','wall',
+      'wand','ward','warm','warn','warp','wary','wash','wasp','wave','wavy',
+      'waxy','ways','weak','wear','weed','week','well','went','were','west',
+      'what','when','whom','wick','wide','wife','wild','will','wilt','wily',
+      'wind','wine','wing','wink','wipe','wire','wise','wish','with','wits',
+      'woke','wolf','wood','wool','word','wore','work','worm','worn','wove',
+      'wrap','wren','yard','yarn','yeah','year','yell','your','zeal','zero',
+      'zinc','zone','zoom','arch','arid','arts','atom','avid','axis','balm',
+      'barn','bass','beam','bead','beak','bend','berm','bias','blot','boil',
+      'bout','brag','brew','brim','bump','bunk','burp','calf','cape','cite',
+      'clan','clog','clot','cob','coax','cog','cone','crab','cram','crib',
+      'cub','cult','cusp','damp','daze','deft','dell','dent','dew','dire',
+      'dote','drab','dram','dray','dub','dud','dug','dwelt','dyer','earl',
+      'eave','eel','elan','elk','elm','etch','ewe','fad','faze','fib',
+      'fig','fir','fizz','flab','flak','flan','flea','flit','flog','flop',
+      'flux','foal','foe','fog','fray','fret','frown','gag','gall','gash',
+      'gasp','gel','gem','gig','gilt','gist','glob','gnaw','gnu','gorge',
+      'gown','grad','haven','hawk','hazel','hem','hex','hilt','hind','hive',
+      'hob','hog','hop','hose','hub','hue','huff','hug','hump','husk',
+      'igloo','imp','inept','inn','ion','irk','jab','jag','jam','jar',
+      'jaunt','jaw','jig','jilt','jive','jog','jolt','jot','jowl','jug',
+      'jut','keg','ken','kin','kit','knack','knave','knead','kneel','knelt',
+      'lad','lag','lair','lank','lap','lard','lark','lash','lass','lath',
+      'lava','lea','ledge','leek','leg','lilac','lilt','lint','lisp','lit',
+      'lobe','log','lone','loom','loon','loot','lop','lore','lug','lull',
+      'mace','mad','mange','manor','maple','marsh','mat','maul','maw','meek',
+      'mesa','mew','mica','midst','miff','mink','mire','mitt','mob','mop',
+      'morel','mote','mow','muck','muff','mug','mull','murk','nab','nag',
+      'nap','nave','nib','nil','nip','nit','nod','nook','noose','notch',
+      'nub','numb','nun','oak','oar','oat','ode','okra','orb','ore',
+      'otter','ouch','our','out','oval','owl','pact','pall','pang','par',
+      'pare','parch','pat','paw','pea','peg','pen','perch','pew','plait',
+      'plod','ploy','plumb','plume','plump','plunge','plunk','pod','poise','poke',
+      'pomp','pop','porch','pore','pout','pox','pram','prank','prawn','preen',
+      'prep','prig','prod','prom','prone','prose','prude','prune','pub','pug',
+      'pun','pup','quail','qualm','quay','quell','queue','quilt','quirk','quota',
+      'rag','ram','ranch','rap','rasp','rat','realm','ref','reign','relish',
+      'rib','ridge','rig','rim','rinse','rob','rod','roe','roost','rot',
+      'rouge','rout','rove','rowdy','rub','rue','rug','rum','rune','ruse',
+      'rut','rye','sag','sap','scab','scald','scalp','scamp','scant','scar',
+      'scone','scoop','scope','scorn','scout','scowl','scrap','scrub','seep','shack',
+      'shale','sham','shawl','shear','sheen','sheer','shelf','shift','shim','shire',
+      'shone','shook','shore','short','shove','shrub','shrug','shun','sieve','sift',
+      'singe','sip','sire','skid','skill','skimp','skirt','skulk','skull','slag',
+      'slain','slant','slate','sleek','sleet','slept','slice','sling','slink','sliver',
+      'slob','slope','sloth','slouch','smack','smelt','smirk','smite','smog','snag',
+      'snare','snarl','sneak','sneer','snide','snore','snout','snub','snug','solve',
+      'soot','sore','spare','spark','spasm','spawn','spear','speck','spell','spelt',
+      'spent','spew','spice','spill','spine','spite','splint','spoke','spook','spool',
+      'spoon','spore','sport','spout','spray','spree','sprig','sprint','sprout','spud',
+      'spun','squad','squat','squid','stack','staff','stain','stair','stake','stale',
+      'stalk','stall','stamp','stark','stash','steal','steam','steel','steep','steer',
+      'sting','stink','stint','stock','stoic','stoke','stole','stomp','stone','stood',
+      'stool','stoop','storm','stout','stove','strap','straw','stray','strip','strut',
+      'stuck','stuff','stump','stung','stunk','stunt','surge','swab','swamp','swarm',
+      'sway','swear','sweep','sweet','swell','swept','swift','swine','swirl','swoop',
+      'swore','sworn','abbey','abort','above','abuse','abyss','acorn','admit','adopt',
+      'adult','after','again','agent','agile','aging','agree','ahead','aisle','alarm',
+      'album','alert','algae','alibi','align','alike','alive','alley','allot','allow',
+      'alloy','aloft','alone','along','aloof','altar','alter','amber','ample','amuse',
+      'angel','anger','angle','angry','ankle','annex','antic','anvil','apart','apple',
+      'apply','apron','arena','argue','arise','armor','aroma','arrow','aside','asset',
+      'atlas','attic','audit','awake','award','aware','awful','badge','badly','bagel',
+      'barge','baron','basic','basin','basis','batch','beach','beard','begin','being',
+      'below','bench','berry','bible','bison','black','blade','blame','bland','blank',
+      'blast','blaze','bleak','bleed','blend','bless','blind','blink','bliss','block',
+      'bloom','blown','board','boast','bonus','booth','bound','brace','brain','brand',
+      'brass','brave','bread','break','breed','brick','bride','brief','bring','broad',
+      'broke','brook','broom','broth','brown','brush','budge','build','built','bunch',
+      'burst','buyer','cabin','cable','camel','candy','cargo','carry','catch','cause',
+      'cedar','chain','chair','chalk','champ','chant','chaos','charm','chart','chase',
+      'cheap','check','cheek','cheer','chess','chest','chick','chief','child','chill',
+      'china','choir','choke','chord','chunk','churn','civil','clamp','clash','clasp',
+      'class','clean','clear','clerk','click','cliff','climb','cling','cloak','close',
+      'cloth','cloud','clown','coach','coast','comma','coral','couch','could','count',
+      'court','cover','crack','craft','crane','crash','crawl','crazy','cream','creek',
+      'crest','crime','crisp','cross','crowd','crown','crude','cruel','crush','curve',
+      'cycle','daily','dairy','dance','decay','delta','dense','depot','depth','derby',
+      'devil','diary','digit','ditch','dizzy','dodge','doing','donor','doubt','dough',
+      'draft','drain','drake','drama','drank','drape','drawn','dread','dream','dress',
+      'drift','drill','drink','drive','droit','drone','drown','drunk','dryer','dwarf',
+      'dying','eager','eagle','early','earth','eight','elbow','elder','elect','elite',
+      'empty','endow','enemy','enjoy','enter','entry','equal','equip','erode','error',
+      'erupt','essay','ethic','evade','event','every','exact','exalt','exert','exile',
+      'exist','expel','extra','fable','facet','faint','fairy','faith','false','fancy',
+      'fatal','fault','favor','feast','fiber','field','fiery','fifth','fifty','fight',
+      'final','first','fixed','fjord','flask','fleet','flesh','float','flood','floor',
+      'flora','flour','flown','fluid','flush','flute','focal','focus','force','forge',
+      'forth','forum','found','frame','frank','fraud','fresh','front','frost','froze',
+      'fruit','fully','fungi','gauge','genre','ghost','giant','given','glass','gleam',
+      'glide','globe','gloom','glory','gloss','glove','going','goose','grace','grade',
+      'grain','grand','grant','grape','graph','grasp','grass','grave','graze','great',
+      'green','greet','grief','grind','groan','groom','gross','group','grove','growl',
+      'grown','guard','guess','guest','guide','guild','guilt','guise','gulch','gummy',
+      'habit','handy','happy','hardy','harsh','haste','hasty','hatch','haunt','heart',
+      'heavy','hedge','heist','hence','honey','horse','hotel','house','human','humid',
+      'humor','hurry','hyena','image','imply','infer','index','indie','inert','inner',
+      'input','issue','ivory','jewel','joint','joker','judge','juice','juicy','label',
+      'lance','large','laser','latch','later','lathe','laugh','layer','learn','lease',
+      'least','leave','legal','lemon','level','lever','light','liken','limit','linen',
+      'liver','local','logic','loose','lover','lower','loyal','lunar','lunch','lying',
+      'lyric','magic','major','march','mayor','media','mercy','merit','metal','meter',
+      'might','minor','minus','mirth','model','money','month','moral','motor','moult',
+      'mount','mourn','mouse','mouth','muddy','music','nanny','nasal','nerve','never',
+      'night','noble','noise','north','novel','nurse','ocean','offer','often','olive',
+      'onset','opera','orbit','order','organ','other','ought','outer','outdo','oxide',
+      'paint','panel','panic','paper','party','patch','pause','peace','peach','penny',
+      'phase','phone','photo','piano','piece','pilot','pinch','pixel','pizza','place',
+      'plain','plant','plate','plaza','plead','pleat','point','polar','pound','power',
+      'press','price','pride','prime','print','prior','prize','probe','proof','proud',
+      'prove','proxy','psalm','pupil','purse','queen','query','quiet','quite','rabbi',
+      'radar','radio','raise','rally','range','rapid','ratio','razor','reach','react',
+      'ready','rebel','refer','relax','reply','rider','right','rigid','rigor','ripen',
+      'rival','river','robin','robot','rocky','rogue','roman','rough','round','route',
+      'rover','royal','ruler','rumor','rural','saint','salad','sauce','sauna','savor',
+      'scale','scene','scent','score','screw','sense','serve','seven','shade','shaft',
+      'shake','shall','shame','shape','share','sharp','shave','sheep','sheet','shell',
+      'shine','shirt','shock','shoot','shout','sight','since','sixth','sixty','skate',
+      'sleep','slide','small','smart','smell','smile','smoke','solar','solid','sonic',
+      'sorry','sound','south','space','speak','speed','spend','spike'
+    ];
+
+    // Common weak passphrases (case-insensitive check)
+    const WEAK_PASSPHRASES = [
+      'password','letmein','trustno1','iloveyou','sunshine','princess','football',
+      'charlie','shadow','master','dragon','monkey','qwerty','login','welcome',
+      'admin','passphrase','secret','changeme','test','hello','freedom',
+      'whatever','nothing','access','mustang','batman','starwars'
+    ];
+
+    function generatePassphrase(wordCount) {
+      const bytes = new _Uint8Array(wordCount * 2);
+      _getRandomValues(bytes);
+      const words = [];
+      for (let i = 0; i < wordCount; i++) {
+        const idx = ((bytes[i * 2] << 8) | bytes[i * 2 + 1]) % WORDLIST.length;
+        words.push(WORDLIST[idx]);
+      }
+      wipeBuffer(bytes);
+      return words.join('-');
+    }
+
+    function estimateEntropy(passphrase) {
+      if (!passphrase) return { bits: 0, label: 'weak', hint: '' };
+
+      // Check if it's a Diceware-style passphrase from our generator
+      const words = passphrase.split('-');
+      const allInWordlist = words.length >= 4 && words.every(function(w) {
+        return WORDLIST.indexOf(w.toLowerCase()) !== -1;
+      });
+      if (allInWordlist) {
+        const bits = Math.floor(words.length * 11);
+        return { bits, label: entropyLabel(bits), hint: words.length + '-word passphrase' };
+      }
+
+      // Check against weak passphrase list
+      const lower = passphrase.toLowerCase().replace(/[^a-z]/g, '');
+      for (let i = 0; i < WEAK_PASSPHRASES.length; i++) {
+        if (lower === WEAK_PASSPHRASES[i]) {
+          return { bits: 8, label: 'weak', hint: 'Common passphrase — easily guessed' };
+        }
+      }
+
+      // Character class pool estimation
+      let pool = 0;
+      if (/[a-z]/.test(passphrase)) pool += 26;
+      if (/[A-Z]/.test(passphrase)) pool += 26;
+      if (/[0-9]/.test(passphrase)) pool += 10;
+      if (/[^a-zA-Z0-9]/.test(passphrase)) pool += 32;
+
+      let bits = Math.floor(Math.log2(pool) * passphrase.length);
+
+      // Penalize repetitive patterns
+      const unique = new Set(passphrase.toLowerCase().split('')).size;
+      if (unique <= 2) bits = Math.min(bits, 12);
+      else if (unique <= 4) bits = Math.floor(bits * 0.6);
+
+      // Penalize low unique-to-length ratio (e.g. "abcdeabcdeabcde...")
+      const ratio = unique / passphrase.length;
+      if (ratio < 0.3) bits = Math.floor(bits * ratio * 2);
+
+      // Penalize natural language phrases (all lowercase with spaces)
+      const spaceWords = passphrase.trim().split(/\s+/);
+      if (spaceWords.length <= 5 && /^[a-z\s]+$/.test(passphrase)) {
+        bits = Math.min(bits, Math.floor(spaceWords.length * 12.5));
+      }
+
+      let hint = '';
+      if (bits < 40) hint = 'Try the Generate button or add more words';
+      else if (bits < 56) hint = 'Consider adding more words or characters';
+
+      return { bits, label: entropyLabel(bits), hint };
+    }
+
+    function entropyLabel(bits) {
+      if (bits < 40) return 'weak';
+      if (bits < 56) return 'moderate';
+      if (bits < 72) return 'strong';
+      return 'very strong';
     }
 
     // ============================================================
@@ -1525,14 +1833,94 @@
     // RENDEZVOUS
     // ============================================================
 
+    // Passphrase strength meter
+    (function() {
+      const passInput = document.getElementById('passphrase');
+      const strengthDiv = document.getElementById('passStrength');
+      const strengthFill = document.getElementById('strengthFill');
+      const strengthLabel = document.getElementById('strengthLabel');
+      const strengthHint = document.getElementById('strengthHint');
+      const errorDiv = document.getElementById('passError');
+      let debounceTimer = null;
+
+      const COLORS = { weak: '#8c4a4a', moderate: '#8c7a4a', strong: '#4a8c4a', 'very strong': '#6abf6a' };
+
+      passInput.addEventListener('input', function() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = _setTimeout(function() {
+          const val = passInput.value;
+          if (!val) { strengthDiv.style.display = 'none'; errorDiv.style.display = 'none'; return; }
+          strengthDiv.style.display = 'block';
+          errorDiv.style.display = 'none';
+          const result = estimateEntropy(val);
+          const pct = Math.min(100, Math.round((result.bits / 80) * 100));
+          strengthFill.style.width = pct + '%';
+          strengthFill.style.background = COLORS[result.label] || '#8c4a4a';
+          strengthLabel.textContent = result.label + ' (' + result.bits + ' bits)';
+          strengthLabel.style.color = COLORS[result.label] || '#8c4a4a';
+          strengthHint.textContent = result.hint;
+        }, 150);
+      });
+
+      document.getElementById('generateBtn').addEventListener('click', function() {
+        const phrase = generatePassphrase(6);
+        passInput.value = phrase;
+        passInput.type = 'text';
+        document.getElementById('togglePassBtn').textContent = 'Hide';
+        passInput.dispatchEvent(new Event('input'));
+        _setTimeout(function() {
+          if (passInput.type === 'text') {
+            passInput.type = 'password';
+            document.getElementById('togglePassBtn').textContent = 'Show';
+          }
+        }, 5000);
+      });
+
+      document.getElementById('togglePassBtn').addEventListener('click', function() {
+        const btn = document.getElementById('togglePassBtn');
+        if (passInput.type === 'password') {
+          passInput.type = 'text';
+          btn.textContent = 'Hide';
+        } else {
+          passInput.type = 'password';
+          btn.textContent = 'Show';
+        }
+      });
+    })();
+
     document.getElementById('rendezvousBtn').addEventListener('click', async function() {
       const btn = document.getElementById('rendezvousBtn');
       const passphraseInput = document.getElementById('passphrase');
+      const errorDiv = document.getElementById('passError');
       const passphrase = passphraseInput.value.trim();
       const seq = parseInt(document.getElementById('seqNum').value) || 1;
       const memberCount = Math.max(2, Math.min(16, parseInt(document.getElementById('rvMemberCount').value) || 5));
 
-      if (!passphrase || passphrase.length < 6) {
+      errorDiv.style.display = 'none';
+
+      if (!passphrase) return;
+
+      if (passphrase.length < 20) {
+        errorDiv.textContent = 'Passphrase too short \u2014 minimum 20 characters. Use Generate for a secure passphrase.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // Check weak passphrase list
+      const lower = passphrase.toLowerCase().replace(/[^a-z]/g, '');
+      for (let i = 0; i < WEAK_PASSPHRASES.length; i++) {
+        if (lower === WEAK_PASSPHRASES[i]) {
+          errorDiv.textContent = 'This passphrase is too common \u2014 use something unique or click Generate.';
+          errorDiv.style.display = 'block';
+          return;
+        }
+      }
+
+      // Check entropy
+      const entropy = estimateEntropy(passphrase);
+      if (entropy.bits < 40) {
+        errorDiv.textContent = 'Passphrase is too predictable \u2014 add more words or use Generate.';
+        errorDiv.style.display = 'block';
         return;
       }
 
